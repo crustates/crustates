@@ -1,0 +1,35 @@
+# Provides the required status check `ci` on main and development (ruleset
+# protect-main-and-development). Keep the job id `ci`: renaming it blocks every
+# merge until the ruleset is updated as well.
+#
+# No toolchain action: rustup ships on the runner and installs the channel and
+# components named in rust-toolchain.toml.
+name: ci
+
+on:
+  pull_request:
+  push:
+    branches: [main, development]
+
+permissions:
+  contents: read
+
+jobs:
+  ci:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Set up Rust
+        run: rustup toolchain install
+
+      - name: Format and lint
+        run: |
+          if [ ! -f Cargo.toml ]; then
+            echo "no Rust code yet"
+            exit 0
+          fi
+          cargo fmt --all --check
+          cargo clippy --workspace --all-targets -- -D warnings

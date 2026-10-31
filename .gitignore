@@ -1,0 +1,18 @@
+# cargo build output, shared by the whole workspace
+/target
+**/*.rs.bk
+# Cargo.lock and bun.lock are committed on purpose: reproducible builds and CI.
+
+# bun
+node_modules/
+
+# editors and os
+.DS_Store
+.idea/
+.vscode/
+*.swp
+
+# local environment values; .env.example is the committed template
+.env
+.env.*
+!.env.example
