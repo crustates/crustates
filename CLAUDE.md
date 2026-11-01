@@ -82,6 +82,9 @@ this.
   boots it in QEMU (API on `localhost:18080`), or boots the test image and
   waits for `CRUST-SELFTEST: PASS`. Needs podman with KVM; on macOS a rootful
   podman machine with 8 GB of memory.
+- Out-of-tree kernel modules (ZFS so far) each get a stage in
+  `molt/Containerfile`; see `molt/kmods/README.md`. Builds sign them with a
+  throwaway key unless `MOLT_SIGNING_KEY` and `MOLT_SIGNING_CERT` are set.
 - `molt/kernel.lock` pins the image kernel. A base image with another kernel
   fails the build; bump the lock in its own PR after checking OpenZFS supports
   that kernel.
