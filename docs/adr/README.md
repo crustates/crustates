@@ -18,3 +18,4 @@ Each record follows the MADR template in
 | 0010 | [Platform state in SQLite (Raft-replicated later), not PostgreSQL](0010-platform-state-in-sqlite.md)                  | accepted |
 | 0011 | [AI assistant as an MCP client of the public API](0011-assistant-as-mcp-client.md)                                    | proposed |
 | 0012 | [Spawn: pull-based GitOps plus push-to-deploy builds](0012-spawn-gitops-and-push-to-deploy.md)                        | accepted |
+| 0013 | [Rust workspace layout](0013-rust-workspace-layout.md)                                                                | accepted |

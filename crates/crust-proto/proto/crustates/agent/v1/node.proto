@@ -1,0 +1,23 @@
+syntax = "proto3";
+
+package crustates.agent.v1;
+
+// Served by the control plane. Node agents connect to it and report.
+service NodeService {
+  // Reports this node's facts. The first report registers the node; every
+  // report counts as a heartbeat.
+  rpc Report(ReportRequest) returns (ReportResponse);
+}
+
+message ReportRequest {
+  // The node's resource name: a DNS label.
+  string name = 1;
+  string hostname = 2;
+  // CPU architecture, for example "x86_64" or "aarch64".
+  string arch = 3;
+  string kernel = 4;
+  uint32 cpus = 5;
+  uint64 memory_bytes = 6;
+}
+
+message ReportResponse {}

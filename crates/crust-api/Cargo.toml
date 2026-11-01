@@ -1,0 +1,39 @@
+[package]
+name = "crust-api"
+description = "Crustates control plane: REST API and agent gRPC service"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+repository.workspace = true
+publish.workspace = true
+
+[lints]
+workspace = true
+
+[dependencies]
+anyhow.workspace = true
+axum.workspace = true
+crust-proto.workspace = true
+crust-reconcile.workspace = true
+crust-store.workspace = true
+crust-types.workspace = true
+figment.workspace = true
+futures.workspace = true
+jiff.workspace = true
+serde.workspace = true
+serde_json.workspace = true
+thiserror.workspace = true
+tokio.workspace = true
+tokio-stream.workspace = true
+tokio-util.workspace = true
+tonic.workspace = true
+tracing.workspace = true
+tracing-subscriber.workspace = true
+utoipa.workspace = true
+utoipa-axum.workspace = true
+utoipa-scalar.workspace = true
+
+[dev-dependencies]
+crust-agent.workspace = true
+http-body-util.workspace = true
+tower.workspace = true

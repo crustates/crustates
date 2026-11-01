@@ -45,21 +45,10 @@ Code names stay plain: a crate or module is `vm-driver`, not `tide-driver`.
 
 ## Repo layout
 
-Today (milestone M0):
-
-| Path                 | What                                             |
-| -------------------- | ------------------------------------------------ |
-| `docs/plan.md`       | Master plan                                      |
-| `docs/adr/`          | Architecture decision records (MADR)             |
-| `sdk/`               | Client SDK (Apache-2.0), empty for now           |
-| `wit/`               | Barnacle plugin interfaces (Apache-2.0), empty   |
-| `.github/workflows/` | `ci` (the required check) and `docs` (Pages)     |
-
-The workspace skeleton adds:
-
 | Path                     | What                                             |
 | ------------------------ | ------------------------------------------------ |
-| `Cargo.toml`             | Workspace: edition 2024, shared deps and lints   |
+| `docs/plan.md`           | Master plan                                      |
+| `docs/adr/`              | Architecture decision records (MADR)             |
 | `crates/crust-types`     | Resource model: `Resource<Spec, Status>`, `Node` |
 | `crates/crust-store`     | `Store` trait, SQLite store, contract tests      |
 | `crates/crust-proto`     | gRPC protocol between agent and control plane    |
@@ -68,20 +57,29 @@ The workspace skeleton adds:
 | `crates/crust-agent`     | Node agent                                       |
 | `crates/crust-cli`       | The `crust` CLI                                  |
 | `xtask/`                 | `cargo xtask` build tasks                        |
+| `sdk/`                   | Client SDK and `openapi.json` (Apache-2.0)       |
+| `wit/`                   | Barnacle plugin interfaces (Apache-2.0), empty   |
+| `.github/workflows/`     | `ci` (the required check) and `docs` (Pages)     |
 
-Update both tables when the layout changes.
+Update this table when the layout changes. ADR 0013 records why it looks like
+this.
 
 ## Build and test
-
-Once the workspace skeleton lands:
 
 - `cargo xtask ci`: what CI runs (fmt, clippy with warnings as errors, tests,
   cargo-deny). Run it before you push.
 - `cargo test -p <crate>`: one crate's tests.
-- `cargo run -p crust-api`: the control plane; the API reference is at
-  `/docs`.
-- `cargo run -p crust-agent`: registers this machine as a node.
-- `cargo xtask openapi`: regenerates the OpenAPI spec.
+- `cargo run -p crust-api`: the control plane on `127.0.0.1:8080`, API
+  reference at `/docs`, agents on `127.0.0.1:8081`, state in `./crust.db`.
+  Settings: `crust-api.toml` or `CRUST_*` variables (`crates/crust-api/src/config.rs`).
+- `cargo run -p crust-agent`: registers this machine as a node
+  (`CRUST_AGENT_*` variables).
+- `cargo run -p crust-cli -- node list`: the CLI against the local API.
+- `cargo xtask openapi`: regenerates `sdk/openapi.json`; run it after changing
+  the API and commit the result.
+
+A new `Store` implementation runs the shared contract tests from
+`crust_store::contract::run` (feature `contract`).
 
 ## Rules
 
