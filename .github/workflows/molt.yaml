@@ -1,0 +1,236 @@
+# Builds the Molt OS image for amd64 and arm64, boot-tests it, and on
+# development and v* tags publishes it to ghcr.io/crustates/molt (ADR 0014),
+# signed with cosign and with an SPDX SBOM attached.
+#
+# Required check on development: `image (amd64)` (build + boot test) and
+# `image (arm64)` (build only). Pull requests that change nothing the image is
+# built from finish in seconds with success, so docs PRs are not blocked.
+#
+# The hosted arm64 runners have no /dev/kvm (probed 2026-11-01), so arm64 is
+# built and scanned here but boot-tested locally (`cargo xtask molt test`).
+name: molt
+
+on:
+  pull_request:
+  push:
+    branches: [development]
+    tags: ["v*"]
+
+permissions:
+  contents: read
+
+concurrency:
+  group: molt-${{ github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+jobs:
+  image:
+    name: image (${{ matrix.arch }})
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - arch: amd64
+            runner: ubuntu-24.04
+            boot-test: true
+          - arch: arm64
+            runner: ubuntu-24.04-arm
+            boot-test: false
+    runs-on: ${{ matrix.runner }}
+    # The module-signing key lives in the release environment; pull requests
+    # never see it and sign with a throwaway key instead.
+    environment: ${{ github.event_name == 'push' && 'release' || '' }}
+    permissions:
+      contents: read
+      packages: write
+    env:
+      PUBLISH: ${{ github.event_name == 'push' }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+          fetch-depth: 0
+
+      - name: Check for image changes
+        id: changes
+        run: |
+          if [ "$GITHUB_EVENT_NAME" != pull_request ]; then
+            echo "build=true" >>"$GITHUB_OUTPUT"
+            exit 0
+          fi
+          if git diff --name-only "origin/${GITHUB_BASE_REF}...HEAD" |
+            grep -qE '^(molt/|crates/|xtask/|Cargo\.(toml|lock)$|rust-toolchain\.toml$|\.containerignore$|\.github/workflows/molt\.yaml$)'; then
+            echo "build=true" >>"$GITHUB_OUTPUT"
+          else
+            echo "No file the image is built from changed; nothing to build."
+            echo "build=false" >>"$GITHUB_OUTPUT"
+          fi
+
+      - name: Enable KVM
+        if: steps.changes.outputs.build == 'true' && matrix.boot-test
+        run: |
+          echo 'KERNEL=="kvm", GROUP="kvm", MODE="0666", OPTIONS+="static_node=kvm"' |
+            sudo tee /etc/udev/rules.d/99-kvm4all.rules
+          sudo udevadm control --reload-rules
+          sudo udevadm trigger --name-match=kvm
+          if [ ! -w /dev/kvm ]; then
+            echo "::error::/dev/kvm is not usable on this runner; the boot test needs KVM"
+            exit 1
+          fi
+
+      # No build cache: this workflow publishes, and a cache shared with pull
+      # requests could feed it poisoned artifacts.
+      - name: Set up Rust
+        if: steps.changes.outputs.build == 'true'
+        run: rustup toolchain install
+
+      - name: Module-signing key
+        if: steps.changes.outputs.build == 'true' && env.PUBLISH == 'true'
+        env:
+          KEY: ${{ secrets.MOLT_SIGNING_KEY }}
+          CERT_BASE64: ${{ secrets.MOLT_SIGNING_CERT }}
+        run: |
+          if [ -z "$KEY" ] || [ -z "$CERT_BASE64" ]; then
+            echo "::error::MOLT_SIGNING_KEY and MOLT_SIGNING_CERT are missing from the release environment (cargo xtask molt keygen makes them)"
+            exit 1
+          fi
+          umask 077
+          printf '%s\n' "$KEY" >"$RUNNER_TEMP/module-signing-key.pem"
+          printf '%s' "$CERT_BASE64" | base64 -d >"$RUNNER_TEMP/module-signing-cert.der"
+          {
+            echo "MOLT_SIGNING_KEY=$RUNNER_TEMP/module-signing-key.pem"
+            echo "MOLT_SIGNING_CERT=$RUNNER_TEMP/module-signing-cert.der"
+          } >>"$GITHUB_ENV"
+          openssl x509 -inform DER -noout -subject -fingerprint -sha256 -in "$RUNNER_TEMP/module-signing-cert.der"
+
+      - name: Build and boot-test the test image
+        if: steps.changes.outputs.build == 'true' && matrix.boot-test
+        run: cargo xtask molt test
+
+      - name: Build the image
+        if: steps.changes.outputs.build == 'true'
+        run: cargo xtask molt build
+
+      - name: Upload the serial log
+        if: always() && steps.changes.outputs.build == 'true' && matrix.boot-test
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: serial-log-${{ matrix.arch }}
+          path: target/molt/dev-test/serial.log
+          if-no-files-found: ignore
+
+      - name: Export the image
+        if: steps.changes.outputs.build == 'true'
+        run: |
+          # docker-archive: trivy --input reads that or an OCI directory, not an OCI tar.
+          sudo podman save --format docker-archive -o "$RUNNER_TEMP/molt.tar" localhost/crustates/molt:dev
+          sudo chown "$(id -u)" "$RUNNER_TEMP/molt.tar"
+
+      - uses: aquasecurity/setup-trivy@81e514348e19b6112ce2a7e3ecbafe19c1e1f567 # v0.3.1
+        if: steps.changes.outputs.build == 'true'
+        with:
+          version: v0.76.1
+
+      # Critical CVEs with a fix available block publishing. On pull requests
+      # they are reported only: the fix is a base image bump, not the PR.
+      - name: Scan for vulnerabilities
+        if: steps.changes.outputs.build == 'true'
+        run: |
+          trivy image --input "$RUNNER_TEMP/molt.tar" --severity CRITICAL --ignore-unfixed \
+            --exit-code "$([ "$PUBLISH" = true ] && echo 1 || echo 0)"
+
+      - uses: anchore/sbom-action/download-syft@66cbf4bc1f1c0d2edc94016e65bc221b6bb0ad6c # v0.24.3
+        if: steps.changes.outputs.build == 'true'
+        with:
+          syft-version: v1.55.0
+
+      - name: Make the SBOM
+        if: steps.changes.outputs.build == 'true'
+        env:
+          ARCH: ${{ matrix.arch }}
+        run: syft "docker-archive:$RUNNER_TEMP/molt.tar" -o "spdx-json=$RUNNER_TEMP/sbom-$ARCH.spdx.json"
+
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        if: steps.changes.outputs.build == 'true'
+        with:
+          name: sbom-${{ matrix.arch }}
+          path: ${{ runner.temp }}/sbom-${{ matrix.arch }}.spdx.json
+
+      - name: Push the ${{ matrix.arch }} image
+        if: steps.changes.outputs.build == 'true' && env.PUBLISH == 'true'
+        env:
+          TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          ARCH: ${{ matrix.arch }}
+        run: |
+          printf '%s' "$TOKEN" | sudo podman login ghcr.io --username "$GITHUB_ACTOR" --password-stdin
+          sudo podman push localhost/crustates/molt:dev "docker://ghcr.io/crustates/molt:sha-${GITHUB_SHA::7}-${ARCH}"
+
+  publish:
+    needs: image
+    if: github.event_name == 'push'
+    runs-on: ubuntu-24.04
+    permissions:
+      contents: read
+      packages: write
+      # Keyless cosign signatures with the workflow's GitHub OIDC identity.
+      id-token: write
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Choose tags
+        id: tags
+        run: |
+          if [[ "$GITHUB_REF" == refs/tags/v* ]]; then
+            version=${GITHUB_REF_NAME#v}
+            workspace=$(sed -n 's/^version = "\(.*\)"/\1/p' Cargo.toml | head -n 1)
+            if [ "$version" != "$workspace" ]; then
+              echo "::error::tag $GITHUB_REF_NAME does not match the workspace version $workspace"
+              exit 1
+            fi
+            echo "tags=$version beta" >>"$GITHUB_OUTPUT"
+          else
+            echo "tags=development sha-${GITHUB_SHA::7}" >>"$GITHUB_OUTPUT"
+          fi
+
+      - name: Publish the multi-arch image
+        id: push
+        env:
+          TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          TAGS: ${{ steps.tags.outputs.tags }}
+        run: |
+          image=ghcr.io/crustates/molt
+          printf '%s' "$TOKEN" | podman login ghcr.io --username "$GITHUB_ACTOR" --password-stdin
+          podman manifest create molt
+          for arch in amd64 arm64; do
+            podman manifest add molt "docker://$image:sha-${GITHUB_SHA::7}-$arch"
+          done
+          for tag in $TAGS; do
+            podman manifest push --all --digestfile "$RUNNER_TEMP/digest" molt "docker://$image:$tag"
+          done
+          echo "digest=$(cat "$RUNNER_TEMP/digest")" >>"$GITHUB_OUTPUT"
+
+      - uses: sigstore/cosign-installer@6f9f17788090df1f26f669e9d70d6ae9567deba6 # v4.1.2
+
+      - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+        with:
+          pattern: sbom-*
+          path: ${{ runner.temp }}/sbom
+          merge-multiple: true
+
+      - name: Sign the image and attach the SBOMs
+        env:
+          TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          DIGEST: ${{ steps.push.outputs.digest }}
+        run: |
+          image=ghcr.io/crustates/molt
+          printf '%s' "$TOKEN" | cosign login ghcr.io --username "$GITHUB_ACTOR" --password-stdin
+          # --recursive signs the manifest list and each architecture's image.
+          cosign sign --yes --recursive "$image@$DIGEST"
+          for arch in amd64 arm64; do
+            arch_digest=$(skopeo inspect --raw "docker://$image@$DIGEST" |
+              jq -r --arg arch "$arch" '.manifests[] | select(.platform.architecture == $arch) | .digest')
+            cosign attest --yes --type spdxjson --predicate "$RUNNER_TEMP/sbom/sbom-$arch.spdx.json" "$image@$arch_digest"
+          done
+          echo "Published $image@$DIGEST" >>"$GITHUB_STEP_SUMMARY"

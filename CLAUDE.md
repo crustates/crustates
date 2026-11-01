@@ -85,6 +85,10 @@ this.
 - Out-of-tree kernel modules (ZFS so far) each get a stage in
   `molt/Containerfile`; see `molt/kmods/README.md`. Builds sign them with a
   throwaway key unless `MOLT_SIGNING_KEY` and `MOLT_SIGNING_CERT` are set.
+- `cargo xtask molt keygen` makes the release module-signing key pair once;
+  it goes into the `release` environment secrets, never into the repo.
+- The `molt` workflow builds both architectures, boot-tests amd64 (the hosted
+  arm64 runners have no KVM) and publishes to `ghcr.io/crustates/molt`.
 - `molt/kernel.lock` pins the image kernel. A base image with another kernel
   fails the build; bump the lock in its own PR after checking OpenZFS supports
   that kernel.

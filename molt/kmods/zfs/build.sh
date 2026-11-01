@@ -34,7 +34,9 @@ fi
     --with-dracutdir=/usr/lib/dracut \
     --enable-systemd --disable-sysvinit --disable-pyzfs
 make -j"$(nproc)"
-make install DESTDIR=/out
+# Kbuild would try to sign with the kernel's own build key, which kernel-devel
+# does not ship; sign.sh signs instead.
+make install DESTDIR=/out CONFIG_MODULE_SIG_ALL=
 # Kbuild installs modules under /lib, a symlink to usr/lib in the image.
 if [ -d /out/lib/modules ]; then
     mkdir -p /out/usr/lib

@@ -6,6 +6,8 @@
 //!   serial console on this terminal; the API is on `localhost:18080`
 //! - `test`: builds the test image, boots it headless, and waits for
 //!   `CRUST-SELFTEST: PASS` on the serial console
+//! - `keygen`: makes the release module-signing key pair, once, for the
+//!   `release` environment secrets
 //!
 //! `MOLT_ACCEL=tcg` boots without KVM (slow); see `molt/tools/boot-vm`.
 
@@ -31,7 +33,8 @@ pub fn main(args: &[String]) -> anyhow::Result<()> {
         Some("build") => build(test),
         Some("run") => run(test),
         Some("test") => self_test(),
-        _ => bail!("usage: cargo xtask molt <build|run|test> [--test]"),
+        Some("keygen") => keygen(),
+        _ => bail!("usage: cargo xtask molt <build|run|test|keygen> [--test]"),
     }
 }
 
@@ -80,32 +83,76 @@ fn signing_key() -> anyhow::Result<(PathBuf, PathBuf)> {
     let dir = root().join("target/molt/throwaway-key");
     let (key, cert) = (dir.join("key.pem"), dir.join("cert.der"));
     if !key.exists() || !cert.exists() {
-        std::fs::create_dir_all(&dir).with_context(|| format!("creating {}", dir.display()))?;
-        let status = Command::new("openssl")
-            .args([
-                "req", "-new", "-x509", "-newkey", "rsa:4096", "-nodes", "-days", "36500",
-                "-outform", "DER",
-            ])
-            .args([
-                "-subj",
-                "/CN=Crustates module signing (throwaway, not for release)/",
-            ])
-            .args(["-addext", "extendedKeyUsage=codeSigning"])
-            .arg("-keyout")
-            .arg(&key)
-            .arg("-out")
-            .arg(&cert)
-            .status()
-            .context("running openssl to make a throwaway signing key")?;
-        if !status.success() {
-            bail!("openssl could not make a throwaway signing key");
-        }
+        make_key(
+            &dir,
+            "Crustates module signing (throwaway, not for release)",
+        )?;
     }
     println!(
         "THROWAWAY module-signing key {}: the modules load on machines without Secure Boot only. \
          Set MOLT_SIGNING_KEY and MOLT_SIGNING_CERT to sign with the real key.",
         key.display()
     );
+    Ok((key, cert))
+}
+
+/// Makes the release key pair in `target/molt/release-key` and prints how to
+/// store it as secrets. Refuses to overwrite an existing pair.
+fn keygen() -> anyhow::Result<()> {
+    let dir = root().join("target/molt/release-key");
+    if dir.join("key.pem").exists() {
+        bail!("{} already holds a key; move it away first", dir.display());
+    }
+    let (key, cert) = make_key(&dir, "Crustates module signing")?;
+    let fingerprint = Command::new("openssl")
+        .args([
+            "x509",
+            "-inform",
+            "DER",
+            "-noout",
+            "-fingerprint",
+            "-sha256",
+            "-in",
+        ])
+        .arg(&cert)
+        .output()
+        .context("reading the certificate fingerprint")?;
+    print!("{}", String::from_utf8_lossy(&fingerprint.stdout));
+    println!(
+        "Store the pair in the release environment, then delete {} or keep it offline:\n  \
+         gh secret set MOLT_SIGNING_KEY --env release < {}\n  \
+         base64 < {} | gh secret set MOLT_SIGNING_CERT --env release",
+        dir.display(),
+        key.display(),
+        cert.display()
+    );
+    Ok(())
+}
+
+/// Makes a 4096-bit RSA key (`key.pem`) and a self-signed code-signing
+/// certificate (`cert.der`) in `dir`, readable only by this user.
+fn make_key(dir: &Path, subject: &str) -> anyhow::Result<(PathBuf, PathBuf)> {
+    std::fs::create_dir_all(dir).with_context(|| format!("creating {}", dir.display()))?;
+    let (key, cert) = (dir.join("key.pem"), dir.join("cert.der"));
+    let status = Command::new("sh")
+        .arg("-c")
+        // umask: the private key must not be readable by other users.
+        .arg("umask 077 && exec openssl \"$@\"")
+        .arg("openssl")
+        .args([
+            "req", "-new", "-x509", "-newkey", "rsa:4096", "-nodes", "-days", "36500",
+        ])
+        .args(["-outform", "DER", "-subj", &format!("/CN={subject}/")])
+        .args(["-addext", "extendedKeyUsage=codeSigning"])
+        .arg("-keyout")
+        .arg(&key)
+        .arg("-out")
+        .arg(&cert)
+        .status()
+        .context("running openssl")?;
+    if !status.success() {
+        bail!("openssl could not make the signing key");
+    }
     Ok((key, cert))
 }
 

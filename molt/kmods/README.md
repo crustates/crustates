@@ -8,8 +8,8 @@ Each module has a folder here with a `build.sh` and its own stage in
 FROM kmod-base AS kmod-<name>
 COPY molt/kmods/<name>/ /kmods/<name>/
 RUN /kmods/<name>/build.sh            # installs into /out, modules in /out/usr/lib/modules/<kernel>/extra
-RUN --mount=type=secret,id=module-signing-key,required=true \
-    --mount=type=secret,id=module-signing-cert,required=true \
+RUN --mount=type=secret,id=module-signing-key \
+    --mount=type=secret,id=module-signing-cert \
     /kmods/sign.sh                    # signs every .ko under /out
 ```
 
