@@ -371,7 +371,7 @@ Crustates uses AGPLv3 for the platform, Apache-2.0 for everything others build a
 | App catalog format | Recommended | Compose-based format of our own, with importers for existing catalogs |
 | Accounts | Recommended | Built-in users with passkeys or TOTP, OIDC optional |
 | Assistant model default | Recommended | Off until chosen; the setup suggests a local model sized to the hardware, remote providers opt-in with your own key |
-| Image hosting | Decision | Which registry hosts Molt and platform images (for example GitHub Container Registry) |
+| Image hosting | Decided | GitHub Container Registry: `ghcr.io/crustates/molt`, signed with cosign (ADR 0014) |
 | UI languages | Decision | English only, or English and Dutch from the start |
 | Current's accent colour | Decision | Sea-teal `#0E8A7E` darkened to #0B7A70 (passes WCAG AA); Barnacle takes violet #A77BFF |
 | Sustainability model | Decision | Sponsorships, paid support, or none |

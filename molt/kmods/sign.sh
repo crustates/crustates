@@ -7,6 +7,12 @@ kernel=$(cat /kmods/kernel.lock).$(uname -m)
 key=/run/secrets/module-signing-key
 cert=/run/secrets/module-signing-cert
 sign_file="/usr/src/kernels/${kernel}/scripts/sign-file"
+for secret in "$key" "$cert"; do
+    if [ ! -s "$secret" ]; then
+        echo "sign.sh: $secret is missing; pass the key with podman build --secret (cargo xtask molt build does)" >&2
+        exit 1
+    fi
+done
 
 # /out is copied over the image root. A directory in /out where the image has
 # a symlink (Fedora's /usr/sbin -> bin, /lib -> usr/lib, ...) would replace the

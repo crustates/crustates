@@ -46,8 +46,8 @@ COPY molt/kmods/sign.sh /kmods/sign.sh
 FROM kmod-base AS kmod-zfs
 COPY molt/kmods/zfs/ /kmods/zfs/
 RUN /kmods/zfs/build.sh
-RUN --mount=type=secret,id=module-signing-key,required=true \
-    --mount=type=secret,id=module-signing-cert,required=true \
+RUN --mount=type=secret,id=module-signing-key \
+    --mount=type=secret,id=module-signing-cert \
     /kmods/sign.sh
 
 FROM ${BASE} AS molt
@@ -69,12 +69,11 @@ COPY --from=kmod-zfs /out/ /
 RUN depmod -a "$(ls /usr/lib/modules)"
 COPY molt/rootfs/ /
 RUN systemctl enable crust-api.service crust-agent.service nftables.service
-RUN test -n "${VERSION}" && cat >> /usr/lib/os-release <<OSRELEASE
-VARIANT="Crustates Molt"
-VARIANT_ID=molt
-IMAGE_ID=molt
-IMAGE_VERSION=${VERSION}
-OSRELEASE
+# printf, not a heredoc: RUN heredocs need buildah 1.35+, and the CI runners
+# have podman 4.9 (buildah 1.33).
+RUN test -n "${VERSION}" \
+    && printf 'VARIANT="Crustates Molt"\nVARIANT_ID=molt\nIMAGE_ID=molt\nIMAGE_VERSION=%s\n' "${VERSION}" \
+        >>/usr/lib/os-release
 RUN bootc container lint
 
 FROM molt AS molt-test
