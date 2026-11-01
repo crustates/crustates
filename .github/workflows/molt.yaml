@@ -122,7 +122,8 @@ jobs:
       - name: Export the image
         if: steps.changes.outputs.build == 'true'
         run: |
-          sudo podman save --format oci-archive -o "$RUNNER_TEMP/molt.tar" localhost/crustates/molt:dev
+          # docker-archive: trivy --input reads that or an OCI directory, not an OCI tar.
+          sudo podman save --format docker-archive -o "$RUNNER_TEMP/molt.tar" localhost/crustates/molt:dev
           sudo chown "$(id -u)" "$RUNNER_TEMP/molt.tar"
 
       - uses: aquasecurity/setup-trivy@81e514348e19b6112ce2a7e3ecbafe19c1e1f567 # v0.3.1
@@ -147,7 +148,7 @@ jobs:
         if: steps.changes.outputs.build == 'true'
         env:
           ARCH: ${{ matrix.arch }}
-        run: syft "oci-archive:$RUNNER_TEMP/molt.tar" -o "spdx-json=$RUNNER_TEMP/sbom-$ARCH.spdx.json"
+        run: syft "docker-archive:$RUNNER_TEMP/molt.tar" -o "spdx-json=$RUNNER_TEMP/sbom-$ARCH.spdx.json"
 
       - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         if: steps.changes.outputs.build == 'true'
