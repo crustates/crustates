@@ -41,8 +41,9 @@ images and their signatures for free.
   `<version>` and `beta` from `v*` tags. A `stable` channel comes later.
   Per-architecture images are tagged `sha-<commit>-amd64` and
   `sha-<commit>-arm64`; the other tags are multi-architecture.
-- Images are signed keyless with cosign (GitHub OIDC); SPDX SBOMs are attached
-  as attestations.
+- Images are signed keyless with cosign (GitHub OIDC). Each architecture's
+  SPDX SBOM is attached as an OCI referrer (`oras discover` lists it) and its
+  digest is signed too; a full SBOM is too large for the public Rekor log.
 - Offline updates from a USB stick (plan) do not depend on the registry.
 
 ### Consequences

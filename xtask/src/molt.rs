@@ -26,6 +26,9 @@ const TOOLS_IMAGE: &str = "localhost/crustates/molt-tools:dev";
 const API_PORT: u16 = 18080;
 /// How long `molt test` waits for the selftest result.
 const TEST_TIMEOUT: Duration = Duration::from_mins(15);
+/// How long the serial console may stay silent before `molt test` calls the
+/// VM stalled. Hosted runners occasionally freeze a nested VM in early boot.
+const STALL_TIMEOUT: Duration = Duration::from_mins(5);
 
 pub fn main(args: &[String]) -> anyhow::Result<()> {
     let test = args.iter().any(|a| a == "--test");
@@ -212,21 +215,41 @@ fn self_test() -> anyhow::Result<()> {
     result
 }
 
-/// Waits for the selftest's result line on the serial console.
+/// Waits for the selftest's result line on the serial console. Gives up early
+/// when the console stays silent for `STALL_TIMEOUT`: the VM has stalled.
 fn wait_for_selftest(log: &Path) -> anyhow::Result<()> {
     let start = Instant::now();
+    let (mut seen, mut last_output) = (0, Instant::now());
     while start.elapsed() < TEST_TIMEOUT {
-        let serial = std::fs::read_to_string(log).unwrap_or_default();
-        if let Some(line) = serial.lines().find(|l| l.contains("CRUST-SELFTEST: ")) {
+        let serial = std::fs::read(log).unwrap_or_default();
+        if let Some(line) = selftest_line(&serial) {
             if line.contains("CRUST-SELFTEST: PASS") {
                 println!("{line}");
                 return Ok(());
             }
             bail!("selftest failed: {line}");
         }
+        if serial.len() > seen {
+            (seen, last_output) = (serial.len(), Instant::now());
+        } else if last_output.elapsed() > STALL_TIMEOUT {
+            bail!(
+                "the VM stalled: no serial output for {} s (after {} s of boot)",
+                STALL_TIMEOUT.as_secs(),
+                start.elapsed().as_secs()
+            );
+        }
         std::thread::sleep(Duration::from_secs(2));
     }
     bail!("no selftest result within {} s", TEST_TIMEOUT.as_secs())
+}
+
+/// The selftest's result line in the serial output, if it is there yet.
+fn selftest_line(serial: &[u8]) -> Option<String> {
+    // Lossy: firmware and early boot write bytes that are not UTF-8.
+    String::from_utf8_lossy(serial)
+        .lines()
+        .find(|l| l.contains("CRUST-SELFTEST: "))
+        .map(str::to_owned)
 }
 
 /// Checks the API from outside the VM, through the forwarded port.
@@ -314,4 +337,20 @@ fn is_root() -> bool {
         .arg("-u")
         .output()
         .is_ok_and(|o| o.stdout.starts_with(b"0\n"))
+}
+
+#[cfg(test)]
+mod tests {
+    use super::selftest_line;
+
+    #[test]
+    fn finds_the_result_after_bytes_that_are_not_utf8() {
+        let mut serial = b"UEFI \xff\xfe garbage\r\n[   10.0] booting\r\n".to_vec();
+        assert_eq!(selftest_line(&serial), None);
+        serial.extend_from_slice(b"[   12.9] CRUST-SELFTEST: PASS\r\n");
+        assert_eq!(
+            selftest_line(&serial).as_deref(),
+            Some("[   12.9] CRUST-SELFTEST: PASS")
+        );
+    }
 }
