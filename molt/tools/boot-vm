@@ -1,0 +1,53 @@
+#!/bin/bash
+# Boots a Molt disk image with QEMU and KVM. The disk is opened read-only
+# (snapshot=on), so every boot starts from the installed state.
+#
+#   boot-vm DISK            serial console on this terminal (Ctrl-A X quits)
+#   boot-vm DISK LOGFILE    serial console written to LOGFILE, no terminal
+#
+# The guest's port 8080 (the Crustates API) is forwarded to port 8080 here.
+#
+# MOLT_ACCEL=tcg emulates the CPU instead of using KVM: about 10x slower, for
+# hosts where KVM is missing or broken (nested KVM in a macOS podman machine
+# stalls arm64 guests at the first disk read).
+set -euo pipefail
+
+disk=${1:?usage: boot-vm DISK [LOGFILE]}
+log=${2:-}
+
+accel=${MOLT_ACCEL:-kvm}
+cpu=host
+if [ "$accel" = tcg ]; then
+    cpu=max
+    echo "boot-vm: MOLT_ACCEL=tcg, emulating the CPU without KVM; booting takes several minutes" >&2
+elif [ ! -w /dev/kvm ]; then
+    echo "boot-vm: /dev/kvm is missing or not writable. Pass --device /dev/kvm, or set MOLT_ACCEL=tcg to emulate." >&2
+    exit 1
+fi
+
+case "$(uname -m)" in
+    x86_64)
+        qemu=qemu-system-x86_64 machine=q35
+        code=/usr/share/edk2/ovmf/OVMF_CODE.fd vars=/usr/share/edk2/ovmf/OVMF_VARS.fd
+        ;;
+    aarch64)
+        qemu=qemu-system-aarch64 machine=virt
+        code=/usr/share/edk2/aarch64/QEMU_EFI-pflash.raw vars=/usr/share/edk2/aarch64/vars-template-pflash.raw
+        ;;
+esac
+cp "$vars" /tmp/vars.fd
+
+args=(
+    -machine "$machine,accel=$accel" -cpu "$cpu" -smp 2 -m 2048
+    -drive "if=pflash,format=raw,readonly=on,file=$code"
+    -drive "if=pflash,format=raw,file=/tmp/vars.fd"
+    -drive "if=virtio,format=qcow2,file=$disk,snapshot=on"
+    -netdev "user,id=net0,hostfwd=tcp::8080-:8080"
+    -device "virtio-net-pci,netdev=net0"
+)
+if [ -n "$log" ]; then
+    args+=(-display none -serial "file:$log" -monitor none)
+else
+    args+=(-nographic)
+fi
+exec "$qemu" "${args[@]}"

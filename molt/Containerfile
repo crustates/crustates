@@ -1,0 +1,61 @@
+# Molt: the Crustates OS image (ADR 0002). Build with `cargo xtask molt build`
+# from the repository root, which is the build context.
+#
+# Targets:
+#   molt       the production image
+#   molt-test  molt plus crust-selftest.service, for boot tests only
+
+# Fedora 45 bootc, pinned by digest; Renovate bumps it. A new digest that
+# brings a new kernel fails the kernel.lock check below until the lock is
+# bumped in a deliberate PR.
+ARG BASE=quay.io/fedora/fedora-bootc:45@sha256:8076cf4ff9d1fda1fcc759c021b8c317fe2b687ae51259e45917c95fed3308bc
+
+# Builds the release binaries on the same base, so they link against the
+# same glibc as the image.
+FROM ${BASE} AS builder
+RUN dnf -y install --setopt=install_weak_deps=False gcc rustup && dnf clean all
+ENV RUSTUP_HOME=/opt/rustup CARGO_HOME=/opt/cargo PATH=/opt/cargo/bin:$PATH
+RUN rustup-init -y --profile minimal --default-toolchain none --no-modify-path
+WORKDIR /src
+COPY rust-toolchain.toml ./
+# Installs the toolchain rust-toolchain.toml names, in its own cached layer.
+RUN rustup show active-toolchain || rustup toolchain install
+COPY Cargo.toml Cargo.lock ./
+COPY .cargo .cargo
+COPY crates crates
+COPY xtask xtask
+RUN --mount=type=cache,target=/opt/cargo/registry \
+    --mount=type=cache,target=/src/target \
+    cargo build --release --locked -p crust-api -p crust-agent -p crust-cli \
+    && install -D -m 0755 -t /out/usr/bin \
+        target/release/crust-api target/release/crust-agent target/release/crust
+
+FROM ${BASE} AS molt
+ARG VERSION
+RUN --mount=type=bind,source=molt/kernel.lock,target=/run/kernel.lock \
+    kernel=$(rpm -q --qf '%{VERSION}-%{RELEASE}\n' kernel) \
+    && want=$(cat /run/kernel.lock) \
+    && if [ "$kernel" != "$want" ]; then \
+        echo "kernel $kernel differs from molt/kernel.lock ($want); bump the lock in its own PR" >&2; \
+        exit 1; \
+    fi
+# No SSH: everything goes through the API.
+RUN dnf -y remove openssh-server && dnf clean all \
+    && rm -rf /run/dnf /var/cache/libdnf5 /var/log/dnf5.log* /var/lib/dnf
+COPY --from=builder /out/ /
+COPY molt/rootfs/ /
+RUN systemctl enable crust-api.service crust-agent.service nftables.service
+RUN test -n "${VERSION}" && cat >> /usr/lib/os-release <<OSRELEASE
+VARIANT="Crustates Molt"
+VARIANT_ID=molt
+IMAGE_ID=molt
+IMAGE_VERSION=${VERSION}
+OSRELEASE
+RUN bootc container lint
+
+FROM molt AS molt-test
+COPY molt/test/crust-selftest.sh /usr/libexec/crustates/crust-selftest
+COPY molt/test/crust-selftest.service /usr/lib/systemd/system/
+COPY molt/test/1*-serial-console*.toml /usr/lib/bootc/kargs.d/
+RUN systemctl enable crust-selftest.service
+RUN bootc container lint
