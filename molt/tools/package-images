@@ -1,0 +1,21 @@
+#!/bin/bash
+# Turns bootc-image-builder output in /out into release files in /out/dist:
+#
+#   molt-VERSION-ARCH.qcow2       virtual machines
+#   molt-VERSION-ARCH.raw.zst     written straight onto a disk or SD card
+#   molt-VERSION-ARCH.SHA256SUMS  checksums of both
+set -euo pipefail
+
+version=${1:?usage: package-images VERSION ARCH}
+arch=${2:?usage: package-images VERSION ARCH}
+name="molt-${version}-${arch}"
+dist=/out/dist
+
+rm -rf "$dist"
+mkdir -p "$dist"
+mv /out/qcow2/disk.qcow2 "$dist/$name.qcow2"
+zstd -q -T0 -10 --rm /out/image/disk.raw -o "$dist/$name.raw.zst"
+cd "$dist"
+sha256sum "$name.qcow2" "$name.raw.zst" >"$name.SHA256SUMS"
+chmod 0644 ./*
+ls -l
