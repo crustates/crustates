@@ -1,0 +1,41 @@
+[Unit]
+Description=Crustates control plane
+Documentation=https://github.com/crustates/crustates
+Wants=network-online.target
+After=network-online.target
+
+[Service]
+Type=exec
+# Defaults from the image, overrides from /etc (later files win).
+EnvironmentFile=/usr/lib/crustates/crust-api.env
+EnvironmentFile=-/etc/crustates/crust-api.env
+ExecStart=/usr/bin/crust-api
+Restart=on-failure
+DynamicUser=yes
+# The SQLite database lives in /var/lib/crustates.
+StateDirectory=crustates
+UMask=0077
+ProtectSystem=strict
+ProtectHome=yes
+PrivateTmp=yes
+PrivateDevices=yes
+NoNewPrivileges=yes
+CapabilityBoundingSet=
+ProtectKernelTunables=yes
+ProtectKernelModules=yes
+ProtectKernelLogs=yes
+ProtectControlGroups=yes
+ProtectClock=yes
+ProtectHostname=yes
+RestrictAddressFamilies=AF_INET AF_INET6 AF_UNIX
+RestrictNamespaces=yes
+RestrictRealtime=yes
+RestrictSUIDSGID=yes
+LockPersonality=yes
+MemoryDenyWriteExecute=yes
+SystemCallArchitectures=native
+SystemCallFilter=@system-service
+SystemCallFilter=~@privileged @resources
+
+[Install]
+WantedBy=multi-user.target

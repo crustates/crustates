@@ -1,0 +1,4 @@
+# Build context for molt/Containerfile: keep it to what the image needs.
+target/
+.git/
+**/*.db*

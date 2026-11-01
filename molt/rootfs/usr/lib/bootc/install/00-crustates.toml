@@ -1,0 +1,4 @@
+# Root filesystem for every install: bootc install, bootc-image-builder and
+# the installer ISO.
+[install.filesystem.root]
+type = "xfs"

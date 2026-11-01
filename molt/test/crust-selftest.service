@@ -1,0 +1,15 @@
+# Test image only: checks the booted image and prints CRUST-SELFTEST: PASS or
+# CRUST-SELFTEST: FAIL <reason> on the console.
+[Unit]
+Description=Crustates image selftest
+Wants=crust-api.service crust-agent.service
+After=crust-api.service crust-agent.service
+
+[Service]
+Type=oneshot
+ExecStart=/usr/libexec/crustates/crust-selftest
+StandardOutput=journal+console
+StandardError=journal+console
+
+[Install]
+WantedBy=multi-user.target

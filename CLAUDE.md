@@ -57,6 +57,7 @@ Code names stay plain: a crate or module is `vm-driver`, not `tide-driver`.
 | `crates/crust-agent`     | Node agent                                       |
 | `crates/crust-cli`       | The `crust` CLI                                  |
 | `xtask/`                 | `cargo xtask` build tasks                        |
+| `molt/`                  | Molt OS image: Containerfile, rootfs, selftest   |
 | `sdk/`                   | Client SDK and `openapi.json` (Apache-2.0)       |
 | `wit/`                   | Barnacle plugin interfaces (Apache-2.0), empty   |
 | `.github/workflows/`     | `ci` (the required check) and `docs` (Pages)     |
@@ -77,6 +78,13 @@ this.
 - `cargo run -p crust-cli -- node list`: the CLI against the local API.
 - `cargo xtask openapi`: regenerates `sdk/openapi.json`; run it after changing
   the API and commit the result.
+- `cargo xtask molt build | run | test`: builds the Molt image with podman,
+  boots it in QEMU (API on `localhost:18080`), or boots the test image and
+  waits for `CRUST-SELFTEST: PASS`. Needs podman with KVM; on macOS a rootful
+  podman machine with 8 GB of memory.
+- `molt/kernel.lock` pins the image kernel. A base image with another kernel
+  fails the build; bump the lock in its own PR after checking OpenZFS supports
+  that kernel.
 
 A new `Store` implementation runs the shared contract tests from
 `crust_store::contract::run` (feature `contract`).

@@ -1,0 +1,4 @@
+# Test image only: kernel and service output on the serial port, where
+# `cargo xtask molt test` reads the selftest result.
+kargs = ["console=tty0", "console=ttyS0,115200n8"]
+match-architectures = ["x86_64"]

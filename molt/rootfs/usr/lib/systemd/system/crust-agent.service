@@ -1,0 +1,40 @@
+[Unit]
+Description=Crustates node agent
+Documentation=https://github.com/crustates/crustates
+Wants=network-online.target
+After=network-online.target crust-api.service
+
+[Service]
+Type=exec
+# Defaults from the image, overrides from /etc (later files win).
+EnvironmentFile=/usr/lib/crustates/crust-agent.env
+EnvironmentFile=-/etc/crustates/crust-agent.env
+ExecStart=/usr/bin/crust-agent
+Restart=on-failure
+# The agent only reports facts for now; engines will need more rights later.
+DynamicUser=yes
+UMask=0077
+ProtectSystem=strict
+ProtectHome=yes
+PrivateTmp=yes
+PrivateDevices=yes
+NoNewPrivileges=yes
+CapabilityBoundingSet=
+ProtectKernelTunables=yes
+ProtectKernelModules=yes
+ProtectKernelLogs=yes
+ProtectControlGroups=yes
+ProtectClock=yes
+ProtectHostname=yes
+RestrictAddressFamilies=AF_INET AF_INET6 AF_UNIX
+RestrictNamespaces=yes
+RestrictRealtime=yes
+RestrictSUIDSGID=yes
+LockPersonality=yes
+MemoryDenyWriteExecute=yes
+SystemCallArchitectures=native
+SystemCallFilter=@system-service
+SystemCallFilter=~@privileged @resources
+
+[Install]
+WantedBy=multi-user.target

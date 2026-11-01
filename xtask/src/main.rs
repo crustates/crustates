@@ -1,5 +1,8 @@
 //! Build tasks: `cargo xtask ci` runs what CI runs; `cargo xtask openapi`
-//! writes the API description to `sdk/openapi.json`.
+//! writes the API description to `sdk/openapi.json`; `cargo xtask molt`
+//! builds, boots and tests the OS image (see `molt.rs`).
+
+mod molt;
 
 use std::path::{Path, PathBuf};
 use std::process::Command;
@@ -7,10 +10,12 @@ use std::process::Command;
 use anyhow::{Context, bail};
 
 fn main() -> anyhow::Result<()> {
-    match std::env::args().nth(1).as_deref() {
+    let args: Vec<String> = std::env::args().skip(1).collect();
+    match args.first().map(String::as_str) {
         Some("ci") => ci(),
         Some("openapi") => openapi(),
-        _ => bail!("usage: cargo xtask <ci|openapi>"),
+        Some("molt") => molt::main(&args[1..]),
+        _ => bail!("usage: cargo xtask <ci|openapi|molt>"),
     }
 }
 
