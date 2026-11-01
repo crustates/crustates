@@ -166,6 +166,6 @@ mod tests {
         assert_eq!(report.name, "test");
         assert!(report.cpus > 0);
         assert!(report.memory_bytes > 0);
-        assert!(!report.arch.is_empty());
+        assert_ne!(report.arch, "");
     }
 }
