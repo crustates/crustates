@@ -1,0 +1,25 @@
+[package]
+name = "crust-agent"
+description = "Crustates node agent"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+repository.workspace = true
+publish.workspace = true
+
+[lints]
+workspace = true
+
+[dependencies]
+anyhow.workspace = true
+crust-proto.workspace = true
+crust-types.workspace = true
+figment.workspace = true
+serde.workspace = true
+sysinfo.workspace = true
+thiserror.workspace = true
+tokio.workspace = true
+tokio-util.workspace = true
+tonic.workspace = true
+tracing.workspace = true
+tracing-subscriber.workspace = true

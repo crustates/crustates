@@ -16,3 +16,6 @@ node_modules/
 .env
 .env.*
 !.env.example
+
+# local control plane database (`cargo run -p crust-api`)
+/crust.db*

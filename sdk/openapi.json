@@ -1,0 +1,349 @@
+{
+  "openapi": "3.1.0",
+  "info": {
+    "title": "Crustates API",
+    "description": "The declarative API of Crustates: your own cloud, on your own hardware.",
+    "license": {
+      "name": "Apache-2.0",
+      "identifier": "Apache-2.0"
+    },
+    "version": "0.1.0"
+  },
+  "paths": {
+    "/healthz": {
+      "get": {
+        "summary": "Reports that the API is up, with its version.",
+        "operationId": "healthz",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Health"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/nodes": {
+      "get": {
+        "tags": [
+          "nodes"
+        ],
+        "summary": "Lists all nodes, or streams changes with `watch=true`.",
+        "operationId": "list_nodes",
+        "parameters": [
+          {
+            "name": "watch",
+            "in": "path",
+            "description": "Instead of the list, stream server-sent events: first an `added` event\nper existing node, then `added` or `modified` for every change. Each\nevent's data is a Node. A node may appear twice around the start.",
+            "required": true,
+            "schema": {
+              "type": "boolean"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "All nodes, or a stream of node events with `watch=true`",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/NodeList"
+                }
+              },
+              "text/event-stream": {
+                "schema": {
+                  "$ref": "#/components/schemas/Node"
+                }
+              }
+            }
+          },
+          "500": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/nodes/{name}": {
+      "get": {
+        "tags": [
+          "nodes"
+        ],
+        "summary": "Reads one node.",
+        "operationId": "get_node",
+        "parameters": [
+          {
+            "name": "name",
+            "in": "path",
+            "description": "The node name",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Node"
+                }
+              }
+            }
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            }
+          },
+          "500": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            }
+          }
+        }
+      }
+    }
+  },
+  "components": {
+    "schemas": {
+      "Condition": {
+        "type": "object",
+        "description": "The state of one aspect of a resource, as in Kubernetes conditions.",
+        "required": [
+          "type",
+          "status",
+          "reason",
+          "message",
+          "last_transition"
+        ],
+        "properties": {
+          "last_transition": {
+            "type": "string",
+            "format": "date-time",
+            "description": "When `status` last changed."
+          },
+          "message": {
+            "type": "string",
+            "description": "A human-readable explanation."
+          },
+          "reason": {
+            "type": "string",
+            "description": "A short machine-readable reason, for example `HeartbeatMissed`."
+          },
+          "status": {
+            "$ref": "#/components/schemas/ConditionStatus",
+            "description": "Whether the condition holds."
+          },
+          "type": {
+            "type": "string",
+            "description": "What this condition is about, for example [`READY`]."
+          }
+        }
+      },
+      "ConditionStatus": {
+        "type": "string",
+        "description": "Whether a [`Condition`] holds.",
+        "enum": [
+          "True",
+          "False",
+          "Unknown"
+        ]
+      },
+      "ErrorBody": {
+        "type": "object",
+        "description": "An error response.",
+        "required": [
+          "error"
+        ],
+        "properties": {
+          "error": {
+            "type": "string",
+            "description": "What went wrong."
+          }
+        }
+      },
+      "Health": {
+        "type": "object",
+        "description": "The API is up.",
+        "required": [
+          "status",
+          "version"
+        ],
+        "properties": {
+          "status": {
+            "type": "string",
+            "description": "Always `ok`."
+          },
+          "version": {
+            "type": "string",
+            "description": "The control plane version."
+          }
+        }
+      },
+      "Metadata": {
+        "type": "object",
+        "description": "Identity and bookkeeping shared by every resource.",
+        "required": [
+          "name",
+          "uid",
+          "generation",
+          "created",
+          "updated"
+        ],
+        "properties": {
+          "created": {
+            "type": "string",
+            "format": "date-time",
+            "description": "When the resource was created."
+          },
+          "generation": {
+            "type": "integer",
+            "format": "int64",
+            "description": "Increases by one on every write; writes must name the generation they\nread, so concurrent writers cannot overwrite each other."
+          },
+          "labels": {
+            "type": "object",
+            "description": "Free-form key/value pairs for grouping and selection.",
+            "additionalProperties": {
+              "type": "string"
+            },
+            "propertyNames": {
+              "type": "string"
+            }
+          },
+          "name": {
+            "type": "string",
+            "description": "Unique per kind. See [`validate_name`]."
+          },
+          "uid": {
+            "type": "string",
+            "format": "uuid",
+            "description": "Unique forever, also across deletes and re-creates."
+          },
+          "updated": {
+            "type": "string",
+            "format": "date-time",
+            "description": "When the resource was last written."
+          }
+        }
+      },
+      "Node": {
+        "type": "object",
+        "description": "A Node resource: metadata, the desired spec and the observed status.",
+        "required": [
+          "metadata",
+          "spec",
+          "status"
+        ],
+        "properties": {
+          "metadata": {
+            "$ref": "#/components/schemas/Metadata"
+          },
+          "spec": {
+            "$ref": "#/components/schemas/NodeSpec"
+          },
+          "status": {
+            "$ref": "#/components/schemas/NodeStatus"
+          }
+        }
+      },
+      "NodeList": {
+        "type": "object",
+        "description": "Every node.",
+        "required": [
+          "items"
+        ],
+        "properties": {
+          "items": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/Node"
+            },
+            "description": "Nodes sorted by name."
+          }
+        }
+      },
+      "NodeSpec": {
+        "type": "object",
+        "description": "What the user wants from a node. Node labels live in\n[`Metadata::labels`]."
+      },
+      "NodeStatus": {
+        "type": "object",
+        "description": "What the agent reports about a node, plus its conditions.",
+        "required": [
+          "hostname",
+          "arch",
+          "kernel",
+          "cpus",
+          "memory_bytes"
+        ],
+        "properties": {
+          "arch": {
+            "type": "string",
+            "description": "CPU architecture, for example `x86_64` or `aarch64`."
+          },
+          "conditions": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/Condition"
+            },
+            "description": "Conditions, including [`READY`]."
+          },
+          "cpus": {
+            "type": "integer",
+            "format": "int32",
+            "description": "Number of logical CPUs.",
+            "minimum": 0
+          },
+          "hostname": {
+            "type": "string",
+            "description": "The host name the machine reports."
+          },
+          "kernel": {
+            "type": "string",
+            "description": "Kernel version."
+          },
+          "last_heartbeat": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "format": "date-time",
+            "description": "When the agent last reported."
+          },
+          "memory_bytes": {
+            "type": "integer",
+            "format": "int64",
+            "description": "Total memory in bytes.",
+            "minimum": 0
+          }
+        }
+      }
+    }
+  },
+  "tags": [
+    {
+      "name": "nodes",
+      "description": "Machines that run the node agent"
+    }
+  ]
+}

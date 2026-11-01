@@ -1,0 +1,30 @@
+[package]
+name = "crust-store"
+description = "Crustates state store: the Store trait and its SQLite implementation"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+repository.workspace = true
+publish.workspace = true
+
+[lints]
+workspace = true
+
+[features]
+# Exposes the contract test suite that every Store implementation must pass.
+contract = []
+
+[dependencies]
+crust-types.workspace = true
+futures.workspace = true
+jiff.workspace = true
+serde.workspace = true
+serde_json.workspace = true
+sqlx.workspace = true
+thiserror.workspace = true
+tokio.workspace = true
+tokio-stream.workspace = true
+uuid.workspace = true
+
+[dev-dependencies]
+crust-store = { workspace = true, features = ["contract"] }
