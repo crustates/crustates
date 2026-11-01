@@ -30,6 +30,26 @@ RUN --mount=type=cache,target=/opt/cargo/registry \
     && install -D -m 0755 -t /out/usr/bin \
         target/release/crust-api target/release/crust-agent target/release/crust
 
+# The base image plus the kernel-devel that matches kernel.lock, for building
+# out-of-tree modules. See molt/kmods/README.md.
+FROM ${BASE} AS kmod-base
+COPY molt/kernel.lock /kmods/kernel.lock
+RUN kernel=$(cat /kmods/kernel.lock).$(uname -m) \
+    && version=${kernel%%-*} release=${kernel#*-} && release=${release%.*} \
+    && pkgs="gcc make elfutils-libelf-devel libuuid-devel libblkid-devel libtirpc-devel openssl-devel zlib-ng-compat-devel libaio-devel libattr-devel systemd-devel" \
+    && { dnf -y install --setopt=install_weak_deps=False "kernel-devel-${kernel}" $pkgs \
+        || dnf -y install --setopt=install_weak_deps=False $pkgs \
+            "https://kojipkgs.fedoraproject.org/packages/kernel/${version}/${release}/$(uname -m)/kernel-devel-${kernel}.rpm"; } \
+    && dnf clean all
+COPY molt/kmods/sign.sh /kmods/sign.sh
+
+FROM kmod-base AS kmod-zfs
+COPY molt/kmods/zfs/ /kmods/zfs/
+RUN /kmods/zfs/build.sh
+RUN --mount=type=secret,id=module-signing-key,required=true \
+    --mount=type=secret,id=module-signing-cert,required=true \
+    /kmods/sign.sh
+
 FROM ${BASE} AS molt
 ARG VERSION
 RUN --mount=type=bind,source=molt/kernel.lock,target=/run/kernel.lock \
@@ -43,6 +63,10 @@ RUN --mount=type=bind,source=molt/kernel.lock,target=/run/kernel.lock \
 RUN dnf -y remove openssh-server && dnf clean all \
     && rm -rf /run/dnf /var/cache/libdnf5 /var/log/dnf5.log* /var/lib/dnf
 COPY --from=builder /out/ /
+# ZFS modules (signed) and userland. Btrfs is in the kernel, btrfs-progs in
+# the base image.
+COPY --from=kmod-zfs /out/ /
+RUN depmod -a "$(ls /usr/lib/modules)"
 COPY molt/rootfs/ /
 RUN systemctl enable crust-api.service crust-agent.service nftables.service
 RUN test -n "${VERSION}" && cat >> /usr/lib/os-release <<OSRELEASE

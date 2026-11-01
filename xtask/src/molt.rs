@@ -46,6 +46,9 @@ fn image(test: bool) -> &'static str {
 fn build(test: bool) -> anyhow::Result<()> {
     let target = if test { "molt-test" } else { "molt" };
     let version = format!("VERSION={}", env!("CARGO_PKG_VERSION"));
+    let (key, cert) = signing_key()?;
+    let key = format!("id=module-signing-key,src={}", key.display());
+    let cert = format!("id=module-signing-cert,src={}", cert.display());
     podman(&[
         "build",
         "-f",
@@ -54,10 +57,56 @@ fn build(test: bool) -> anyhow::Result<()> {
         target,
         "--build-arg",
         &version,
+        "--secret",
+        &key,
+        "--secret",
+        &cert,
         "-t",
         image(test),
         ".",
     ])
+}
+
+/// The module-signing key and certificate: `MOLT_SIGNING_KEY` (PEM) and
+/// `MOLT_SIGNING_CERT` (DER) when set, as in release builds. Otherwise a
+/// throwaway pair in `target/molt/throwaway-key`, made once and reused.
+fn signing_key() -> anyhow::Result<(PathBuf, PathBuf)> {
+    if let (Some(key), Some(cert)) = (
+        std::env::var_os("MOLT_SIGNING_KEY"),
+        std::env::var_os("MOLT_SIGNING_CERT"),
+    ) {
+        return Ok((key.into(), cert.into()));
+    }
+    let dir = root().join("target/molt/throwaway-key");
+    let (key, cert) = (dir.join("key.pem"), dir.join("cert.der"));
+    if !key.exists() || !cert.exists() {
+        std::fs::create_dir_all(&dir).with_context(|| format!("creating {}", dir.display()))?;
+        let status = Command::new("openssl")
+            .args([
+                "req", "-new", "-x509", "-newkey", "rsa:4096", "-nodes", "-days", "36500",
+                "-outform", "DER",
+            ])
+            .args([
+                "-subj",
+                "/CN=Crustates module signing (throwaway, not for release)/",
+            ])
+            .args(["-addext", "extendedKeyUsage=codeSigning"])
+            .arg("-keyout")
+            .arg(&key)
+            .arg("-out")
+            .arg(&cert)
+            .status()
+            .context("running openssl to make a throwaway signing key")?;
+        if !status.success() {
+            bail!("openssl could not make a throwaway signing key");
+        }
+    }
+    println!(
+        "THROWAWAY module-signing key {}: the modules load on machines without Secure Boot only. \
+         Set MOLT_SIGNING_KEY and MOLT_SIGNING_CERT to sign with the real key.",
+        key.display()
+    );
+    Ok((key, cert))
 }
 
 fn run(test: bool) -> anyhow::Result<()> {
