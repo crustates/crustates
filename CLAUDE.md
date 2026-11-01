@@ -85,6 +85,8 @@ this.
 - Out-of-tree kernel modules (ZFS so far) each get a stage in
   `molt/Containerfile`; see `molt/kmods/README.md`. Builds sign them with a
   throwaway key unless `MOLT_SIGNING_KEY` and `MOLT_SIGNING_CERT` are set.
+- `cargo xtask molt images [IMAGE]` makes the release disk images (qcow2,
+  raw.zst) into `target/molt/images/dist`; `docs/install.md` explains them.
 - `cargo xtask molt keygen` makes the release module-signing key pair once;
   it goes into the `release` environment secrets, never into the repo.
 - The `molt` workflow builds both architectures, boot-tests amd64 (the hosted

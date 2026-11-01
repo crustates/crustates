@@ -8,6 +8,8 @@
 //!   `CRUST-SELFTEST: PASS` on the serial console
 //! - `keygen`: makes the release module-signing key pair, once, for the
 //!   `release` environment secrets
+//! - `images [IMAGE]`: makes the release disk images (qcow2, raw.zst) from
+//!   IMAGE, by default the built `molt:dev`, into `target/molt/images/dist`
 //!
 //! `MOLT_ACCEL=tcg` boots without KVM (slow); see `molt/tools/boot-vm`.
 
@@ -37,7 +39,8 @@ pub fn main(args: &[String]) -> anyhow::Result<()> {
         Some("run") => run(test),
         Some("test") => self_test(),
         Some("keygen") => keygen(),
-        _ => bail!("usage: cargo xtask molt <build|run|test|keygen> [--test]"),
+        Some("images") => images(args.get(1).map(String::as_str)),
+        _ => bail!("usage: cargo xtask molt <build|run|test|keygen|images> [--test]"),
     }
 }
 
@@ -285,8 +288,45 @@ fn disk(test: bool) -> anyhow::Result<PathBuf> {
     let out = root()
         .join("target/molt")
         .join(if test { "dev-test" } else { "dev" });
-    std::fs::create_dir_all(&out).with_context(|| format!("creating {}", out.display()))?;
+    image_builder(image(test), &out, &["qcow2"])?;
+    Ok(out)
+}
+
+/// Makes the release disk images of `image` for this machine's architecture.
+fn images(image: Option<&str>) -> anyhow::Result<()> {
+    let image = image.unwrap_or(self::image(false));
+    let arch = match std::env::consts::ARCH {
+        "x86_64" => "amd64",
+        "aarch64" => "arm64",
+        other => bail!("no Molt images for {other}"),
+    };
+    let out = root().join("target/molt/images");
+    build_tools()?;
+    // No installer ISO yet: anaconda-iso cannot find Fedora 45's repos and is
+    // deprecated upstream; the ISO comes with Crustates' own installer.
+    image_builder(image, &out, &["qcow2", "raw"])?;
     podman(&[
+        "run",
+        "--rm",
+        "--security-opt",
+        "label=disable",
+        "-v",
+        &format!("{}:/out", out.display()),
+        "--entrypoint",
+        "/usr/local/bin/package-images",
+        TOOLS_IMAGE,
+        env!("CARGO_PKG_VERSION"),
+        arch,
+    ])?;
+    println!("release files in {}", out.join("dist").display());
+    Ok(())
+}
+
+/// Runs bootc-image-builder on `image`, writing each of `types` under `out`.
+fn image_builder(image: &str, out: &Path, types: &[&str]) -> anyhow::Result<()> {
+    std::fs::create_dir_all(out).with_context(|| format!("creating {}", out.display()))?;
+    let volume = format!("{}:/output", out.display());
+    let mut args = vec![
         "run",
         "--rm",
         "--privileged",
@@ -296,13 +336,14 @@ fn disk(test: bool) -> anyhow::Result<PathBuf> {
         "-v",
         "/var/lib/containers/storage:/var/lib/containers/storage",
         "-v",
-        &format!("{}:/output", out.display()),
+        &volume,
         IMAGE_BUILDER,
-        "--type",
-        "qcow2",
-        image(test),
-    ])?;
-    Ok(out)
+    ];
+    for kind in types {
+        args.extend(["--type", kind]);
+    }
+    args.push(image);
+    podman(&args)
 }
 
 fn build_tools() -> anyhow::Result<()> {

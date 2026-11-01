@@ -1,12 +1,13 @@
 # QEMU and UEFI firmware for booting Molt disk images, the same way on Linux,
-# macOS (inside the podman machine) and CI. Built by `cargo xtask molt`.
+# macOS (inside the podman machine) and CI, and for packaging release disk
+# images (package-images). Built by `cargo xtask molt`.
 FROM quay.io/fedora/fedora:45@sha256:cd137fd325cf4435b8866ba9ada1544e67a645cee56f1017e4289a9a0b6ac8ce
 RUN case "$(uname -m)" in \
-        x86_64) pkgs="qemu-system-x86-core edk2-ovmf" ;; \
-        aarch64) pkgs="qemu-system-aarch64-core edk2-aarch64" ;; \
+        x86_64) pkgs="qemu-system-x86-core edk2-ovmf zstd" ;; \
+        aarch64) pkgs="qemu-system-aarch64-core edk2-aarch64 zstd" ;; \
         *) echo "unsupported architecture $(uname -m)" >&2; exit 1 ;; \
     esac \
     && dnf -y install --setopt=install_weak_deps=False $pkgs \
     && dnf clean all
-COPY boot-vm /usr/local/bin/boot-vm
+COPY boot-vm package-images /usr/local/bin/
 ENTRYPOINT ["/usr/local/bin/boot-vm"]
