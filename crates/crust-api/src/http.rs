@@ -10,7 +10,7 @@ use axum::response::{IntoResponse, Response};
 use axum::{Extension, Json, Router};
 use crust_proto::agent::v1 as pb;
 use crust_store::{Error, Event, SqliteStore, Store};
-use crust_types::{AuditEntry, Node, NodeSpec, UpdatePolicy, Window};
+use crust_types::{AuditEntry, CHANNELS, Node, NodeSpec, UpdatePolicy, Window};
 use futures::{Stream, StreamExt, TryStreamExt, stream};
 use jiff::Timestamp;
 use serde::{Deserialize, Serialize};
@@ -85,6 +85,7 @@ fn routes() -> OpenApiRouter<AppState> {
         .routes(routes!(molt_upgrade))
         .routes(routes!(molt_rollback))
         .routes(routes!(molt_policy))
+        .routes(routes!(molt_channel))
         .routes(routes!(molt_enroll_key))
         .routes(routes!(audit_log))
 }
@@ -318,6 +319,17 @@ struct PolicyChange {
     window: Option<String>,
 }
 
+/// A channel to follow.
+#[derive(Debug, Serialize, Deserialize, ToSchema)]
+struct ChannelChange {
+    /// `stable`, `beta` or `development`.
+    channel: String,
+    /// Switch even if the channel holds an older version than the node
+    /// runs. An older version may not read what a newer one wrote.
+    #[serde(default)]
+    allow_downgrade: bool,
+}
+
 /// A queued key enrolment.
 #[derive(Debug, Serialize, Deserialize, ToSchema)]
 struct Enrolment {
@@ -495,6 +507,53 @@ async fn molt_policy(
         "molt.policy",
         kind,
         COMMAND_TIMEOUT,
+    )
+    .await?;
+    Ok(Json(Outcome {
+        message: result.message,
+    }))
+}
+
+/// Makes the node follow another channel and checks it. With the `auto`
+/// policy a newer image there is staged right away.
+#[utoipa::path(
+    put,
+    path = "/v1/nodes/{name}/molt/channel",
+    tag = "molt",
+    params(("name" = String, Path, description = "The node name")),
+    request_body = ChannelChange,
+    responses(
+        (status = 200, body = Outcome),
+        (status = 400, body = ErrorBody, description = "No such channel"),
+        (status = 404, body = ErrorBody, description = "No such node"),
+        (status = 422, body = ErrorBody, description = "The channel has no image, or an older one and `allow_downgrade` is off"),
+        (status = 503, body = ErrorBody, description = "The node's agent is not connected"),
+    ),
+)]
+async fn molt_channel(
+    State(state): State<AppState>,
+    Extension(principal): Extension<Principal>,
+    Path(name): Path<String>,
+    Json(change): Json<ChannelChange>,
+) -> Result<Json<Outcome>, ApiError> {
+    if !CHANNELS.contains(&change.channel.as_str()) {
+        return Err(ApiError::bad_request(format!(
+            "there is no channel {:?}; the channels are {}",
+            change.channel,
+            CHANNELS.join(", ")
+        )));
+    }
+    let kind = pb::command::Kind::MoltChannel(pb::MoltChannel {
+        channel: change.channel,
+        allow_downgrade: change.allow_downgrade,
+    });
+    let result = run_command(
+        &state,
+        &principal,
+        &name,
+        "molt.channel",
+        kind,
+        UPGRADE_TIMEOUT,
     )
     .await?;
     Ok(Json(Outcome {

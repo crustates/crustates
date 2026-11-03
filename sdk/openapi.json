@@ -194,6 +194,87 @@
         }
       }
     },
+    "/v1/nodes/{name}/molt/channel": {
+      "put": {
+        "tags": [
+          "molt"
+        ],
+        "summary": "Makes the node follow another channel and checks it. With the `auto`\npolicy a newer image there is staged right away.",
+        "operationId": "molt_channel",
+        "parameters": [
+          {
+            "name": "name",
+            "in": "path",
+            "description": "The node name",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ChannelChange"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Outcome"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "No such channel",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "No such node",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "The channel has no image, or an older one and `allow_downgrade` is off",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "The node's agent is not connected",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/v1/nodes/{name}/molt/enroll-key": {
       "post": {
         "tags": [
@@ -521,6 +602,23 @@
           }
         }
       },
+      "ChannelChange": {
+        "type": "object",
+        "description": "A channel to follow.",
+        "required": [
+          "channel"
+        ],
+        "properties": {
+          "allow_downgrade": {
+            "type": "boolean",
+            "description": "Switch even if the channel holds an older version than the node\nruns. An older version may not read what a newer one wrote."
+          },
+          "channel": {
+            "type": "string",
+            "description": "`stable`, `beta` or `development`."
+          }
+        }
+      },
       "Condition": {
         "type": "object",
         "description": "The state of one aspect of a resource, as in Kubernetes conditions.",
@@ -734,7 +832,7 @@
           },
           "channel": {
             "type": "string",
-            "description": "The channel the node follows: the tag it checks for updates."
+            "description": "The channel the node follows: the tag it checks for updates. Empty\nuntil the node's first check picks one."
           },
           "last_check": {
             "type": [

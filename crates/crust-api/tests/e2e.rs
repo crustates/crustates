@@ -1,6 +1,6 @@
 //! The control plane and a real agent, in one process: the node appears,
-//! turns Ready, runs a Molt upgrade sent through the REST API, and turns
-//! NotReady when the agent stops.
+//! turns Ready, runs a Molt upgrade and a channel switch sent through the
+//! REST API, and turns NotReady when the agent stops.
 
 #![allow(clippy::unwrap_used, reason = "test helpers panic on failure")]
 
@@ -105,12 +105,46 @@ async fn agent_heartbeats_drive_node_readiness_and_commands_reach_the_agent() {
         ("molt.upgrade", "ok")
     );
 
+    switch_channel(&client, &api, &token).await;
+
     agent_shutdown.cancel();
     agent.await.unwrap().unwrap();
     wait_for(&store, ConditionStatus::False).await;
 
     server_shutdown.cancel();
     server.await.unwrap().unwrap();
+}
+
+/// Switches the node's channel through the API: unknown channels are a 400,
+/// downgrades need `allow_downgrade`.
+async fn switch_channel(client: &reqwest::Client, api: &str, token: &str) {
+    let channel = format!("{api}/v1/nodes/e2e/molt/channel");
+    let put = |body: Value| client.put(&channel).bearer_auth(token).json(&body).send();
+    let response = put(serde_json::json!({ "channel": "nightly" }))
+        .await
+        .unwrap();
+    assert_eq!(response.status(), 400);
+    // "1.0" is not SemVer, so the agent cannot tell an upgrade from a downgrade.
+    let response = put(serde_json::json!({ "channel": "development" }))
+        .await
+        .unwrap();
+    assert_eq!(response.status(), 422);
+    let body: Value = response.json().await.unwrap();
+    assert!(
+        body["error"]
+            .as_str()
+            .unwrap()
+            .contains("--allow-downgrade"),
+        "{body}"
+    );
+    let body = serde_json::json!({ "channel": "development", "allow_downgrade": true });
+    let response = put(body).await.unwrap();
+    assert_eq!(response.status(), 200);
+    let body: Value = response.json().await.unwrap();
+    assert_eq!(
+        body["message"],
+        "following development; available: 1.2 (sha256:12); crust molt upgrade stages it"
+    );
 }
 
 async fn wait_for(store: &SqliteStore, want: ConditionStatus) {
@@ -128,8 +162,8 @@ async fn wait_for(store: &SqliteStore, want: ConditionStatus) {
     .unwrap_or_else(|_| panic!("node never became {want:?}"));
 }
 
-/// A Molt node that boots 1.0 and follows beta, where 1.1 waits, and its
-/// update settings file.
+/// A Molt node that boots 1.0 and follows beta, where 1.1 waits (1.2 on
+/// development), and its update settings file.
 fn molt_node(dir: &std::path::Path) -> (FakeOs, std::path::PathBuf) {
     let molt_defaults = dir.join("molt.toml");
     std::fs::write(
@@ -145,14 +179,19 @@ fn molt_node(dir: &std::path::Path) -> (FakeOs, std::path::PathBuf) {
             digest: "sha256:10".into(),
             version: "1.0".into(),
         });
-        state.tags.insert(
-            "example.org/molt:beta".into(),
-            Resolved {
-                digest: "sha256:11".into(),
-                platform_digest: "sha256:11".into(),
-                version: "1.1".into(),
-            },
-        );
+        for (tag, version, digest) in [
+            ("beta", "1.1", "sha256:11"),
+            ("development", "1.2", "sha256:12"),
+        ] {
+            state.tags.insert(
+                format!("example.org/molt:{tag}"),
+                Resolved {
+                    digest: digest.into(),
+                    platform_digest: digest.into(),
+                    version: version.into(),
+                },
+            );
+        }
     }
     (os, molt_defaults)
 }
