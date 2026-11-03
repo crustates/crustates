@@ -22,3 +22,4 @@ Each record follows the MADR template in
 | 0014 | [Image hosting on GitHub Container Registry](0014-image-hosting-on-ghcr.md)                                           | accepted |
 | 0015 | [An admin token for the API until accounts arrive](0015-admin-token-until-accounts.md)                                | accepted |
 | 0016 | [Molt updates under Crustates' control, with automatic rollback](0016-controlled-molt-updates.md)                     | accepted |
+| 0017 | [Molt channels: stable, beta and development, promoted by digest](0017-molt-channels.md)                              | accepted |
