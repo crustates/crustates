@@ -30,15 +30,16 @@ Molt once; after that it updates itself from `ghcr.io/crustates/molt`.
 Open the [latest release](https://github.com/crustates/crustates/releases)
 and take the files for your CPU: `amd64` for Intel and AMD, `arm64` for ARM.
 
-| File                           | Use it to                                        |
-| ------------------------------ | ------------------------------------------------ |
-| `molt-VERSION-ARCH.raw.zst`    | Write Molt onto the machine's boot disk (step 3) |
-| `molt-VERSION-ARCH.qcow2`      | Run Molt as a virtual machine (step 3b)          |
-| `molt-VERSION-ARCH.SHA256SUMS` | Check the downloads (step 2)                     |
+| File                           | Use it to                                                |
+| ------------------------------ | -------------------------------------------------------- |
+| `molt-VERSION-ARCH.iso`        | Install from a USB stick (step 3)                        |
+| `molt-VERSION-ARCH.raw.zst`    | Or write Molt straight onto the machine's disk (step 3b) |
+| `molt-VERSION-ARCH.qcow2`      | Or run Molt as a virtual machine (step 3c)               |
+| `molt-VERSION-ARCH.SHA256SUMS` | Check the downloads (step 2)                             |
 
-Each file has a `.sigstore.json` signature next to it. There is no installer
-ISO yet: Crustates' own installer, with a first-run wizard and a hardware
-check, comes later in M0.
+Each file has a `.sigstore.json` signature next to it. The ISO for `arm64`
+is built like the `amd64` one, but only the `amd64` one is installed in
+CI.
 
 ## 2. Check the download
 
@@ -60,7 +61,58 @@ cosign verify-blob molt-VERSION-ARCH.raw.zst \
 
 It prints `Verified OK`.
 
-## 3. Write Molt onto the boot disk
+## 3. Install from a USB stick
+
+Write the ISO onto a USB stick of 4 GB or more (everything on the stick is
+erased), for example with [Fedora Media Writer](https://fedoraproject.org/workstation/download),
+or with `dd`:
+
+```sh
+sudo dd if=molt-VERSION-ARCH.iso of=/dev/sdX bs=4M status=progress conv=fsync
+```
+
+Boot the machine from the stick (the firmware's boot menu is usually F11,
+F12 or Esc). The boot menu offers:
+
+- **Install Crustates**: the installer, below.
+- **Install Crustates (basic graphics)**: the same, for screens that stay
+  black.
+- **Rescue a broken install**: boot the previous OS image, reset the network
+  to DHCP, list the ZFS pools.
+- **Check install media**: verifies the stick against its checksum first.
+
+The installer checks the hardware, then asks for the boot disk (everything on
+it is erased; 32 GB or more), an optional ZFS pool on other disks (single,
+mirror or raidz), and the network. It shows the admin token and the recovery
+PIN (step 4), and installs once you type `ERASE`. Remove the stick and
+reboot.
+
+### Install without questions
+
+Put an `answers.toml` on a second stick labelled `CRUSTANS`, and the
+installer uses it instead of asking. It prints the admin token and PIN on
+the screen and the serial port.
+
+```toml
+disk = "/dev/nvme0n1"   # the boot disk; everything on it is erased
+erase = true            # required: you agree to erase it
+hostname = "node-1"
+channel = "stable"      # or beta
+after = "reboot"        # or poweroff
+
+[network]               # leave it out for DHCP
+method = "static"
+address = "192.168.1.23/24"
+gateway = "192.168.1.1"
+dns = ["192.168.1.1"]
+
+[pool]                  # optional
+name = "tank"
+layout = "mirror"       # single, mirror or raidz
+disks = ["/dev/sda", "/dev/sdb"]
+```
+
+## 3b. Or: write Molt onto the boot disk
 
 You write the disk image straight onto the disk the machine will boot from.
 **Everything on that disk is erased.** Two ways:
@@ -86,7 +138,7 @@ zstd -dc molt-VERSION-ARCH.raw.zst | sudo dd of=/dev/rdiskN bs=4m
 Boot the machine from that disk. On first boot Molt grows its root filesystem
 to fill the disk.
 
-### 3b. Or: run Molt as a virtual machine
+### 3c. Or: run Molt as a virtual machine
 
 Import `molt-VERSION-ARCH.qcow2` as the VM's disk, with UEFI firmware
 (OVMF), 2 CPUs and 2 GB of memory or more. For example with libvirt:
@@ -99,9 +151,10 @@ virt-install --name molt --memory 4096 --vcpus 2 --boot uefi \
 ## 4. Write down the admin token and the recovery PIN
 
 Molt has no SSH: you manage it through its API, and the API needs the
-machine's **admin token**. On the first boot Molt makes it and a nine-digit
-**recovery PIN**, and its screen shows both, with a QR code of the API
-reference:
+machine's **admin token**. With it comes a nine-digit **recovery PIN** for
+the console on the machine's screen. The installer shows both before it
+installs. Installed from a disk image (3b, 3c), Molt makes them on its first
+boot and its screen shows them, with a QR code of the API reference:
 
 ```text
 1  From a computer on the same network, log in:

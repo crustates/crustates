@@ -50,7 +50,7 @@ squashfs, the media checksum).
   pool imports).
 - The payload is the image as an OCI layout in
   `/usr/lib/crustates/payload:molt`, copied with `skopeo copy
-  --preserve-digests` from the registry by digest for releases, so the
+--preserve-digests` from the registry by digest for releases, so the
   installed machine records the digest the release workflow signed. An OCI
   layout keeps the compressed layers; `containers-storage` would need about
   as much memory as the image during the install (image-builder #2536).
@@ -87,7 +87,7 @@ squashfs, the media checksum).
   hosted arm64 runners have no KVM, and image-builder does not boot-test
   arm64 ISOs either.
 - Bad, because bootc 1.16 (in the pinned base) has no `bootc install
-  mount`, so the installer finds the new deployment's `/etc` and `/var` on
+mount`, so the installer finds the new deployment's `/etc` and `/var` on
   the root partition itself.
 
 ### Confirmation

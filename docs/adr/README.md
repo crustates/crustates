@@ -24,3 +24,4 @@ Each record follows the MADR template in
 | 0016 | [Molt updates under Crustates' control, with automatic rollback](0016-controlled-molt-updates.md)                     | accepted |
 | 0017 | [Molt channels: stable, beta and development, promoted by digest](0017-molt-channels.md)                              | accepted |
 | 0018 | [A console on the machine's screen, guarded by a recovery PIN](0018-local-console-and-recovery-pin.md)                | accepted |
+| 0019 | [Install media: a live Molt with our installer, built by image-builder](0019-install-media.md)                        | accepted |
