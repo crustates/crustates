@@ -182,7 +182,8 @@ async fn unattended(path: &Path) -> anyhow::Result<()> {
                 phase,
                 steps.get(i).map_or("", String::as_str)
             )),
-            Done::Log(line) => println!("{line}"),
+            // On the serial console too: a long write would look like a stall.
+            Done::Log(line) => say(&format!("crust-installer: {line}")),
             Done::Installed(result) => {
                 outcome = result;
                 break;

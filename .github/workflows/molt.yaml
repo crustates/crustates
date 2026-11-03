@@ -73,6 +73,11 @@ jobs:
           if grep -qE '^(crates/crust-(agent|api|proto)/|molt/(Containerfile|rootfs/|test/)|xtask/src/molt\.rs$|\.github/workflows/molt\.yaml$)' <<<"$changed"; then
             echo "upgrade-test=--upgrade" >>"$GITHUB_OUTPUT"
           fi
+          # Installing from the ISO adds about 15 minutes too: only for pull
+          # requests that change the installer, its media or the tests.
+          if grep -qE '^(crates/crust-(installer|tui)/|molt/(Containerfile|installer/|test/|tools/)|xtask/src/molt\.rs$|\.github/workflows/molt\.yaml$)' <<<"$changed"; then
+            echo "install-test=true" >>"$GITHUB_OUTPUT"
+          fi
 
       # The runners have about 14 GB free; three test images, a disk image
       # and the Rust build need more. These preinstalled SDKs are unused here.
@@ -128,6 +133,12 @@ jobs:
           UPGRADE_TEST: ${{ steps.changes.outputs.upgrade-test }}
         run: cargo xtask molt test ${UPGRADE_TEST:+"$UPGRADE_TEST"}
 
+      # The test image's ISO, installed on an empty VM with an answers file,
+      # then booted (ADR 0019).
+      - name: Install the test image from its ISO
+        if: steps.changes.outputs.build == 'true' && matrix.boot-test && steps.changes.outputs.install-test == 'true'
+        run: cargo xtask molt test-install
+
       - name: Build the image
         if: steps.changes.outputs.build == 'true'
         run: cargo xtask molt build
@@ -141,6 +152,7 @@ jobs:
           path: |
             target/molt/dev-test/serial.log
             target/molt/dev-test/*.png
+            target/molt/install-test/*.log
           if-no-files-found: ignore
 
       - name: Export the image
@@ -313,6 +325,7 @@ jobs:
             --certificate-identity "https://github.com/${GITHUB_REPOSITORY}/.github/workflows/molt.yaml@${GITHUB_REF}" \
             --certificate-oidc-issuer https://token.actions.githubusercontent.com >/dev/null
           sudo podman pull "$image@$digest"
+          echo "digest-ref=$image@$digest" >>"$GITHUB_OUTPUT"
           # bootc records the name the disk image was built from; the agent
           # follows the channel in molt.toml instead (ADR 0017), so the name
           # only shows in `bootc status` until the first update.
@@ -322,10 +335,18 @@ jobs:
       - name: Set up Rust
         run: rustup toolchain install
 
-      - name: Make the disk images
+      # The disk images, and the install ISO with the image inside by digest.
+      - name: Make the disk images and the ISO
         env:
           IMAGE: ${{ steps.image.outputs.ref }}
-        run: cargo xtask molt images "$IMAGE"
+          DIGEST_REF: ${{ steps.image.outputs.digest-ref }}
+          ARCH: ${{ matrix.arch }}
+        run: |
+          cargo xtask molt images "$IMAGE"
+          cargo xtask molt iso "$DIGEST_REF"
+          name="molt-${GITHUB_REF_NAME#v}-$ARCH"
+          sudo find target/molt/iso -name 'crustates-*.iso' -exec mv {} "target/molt/images/dist/$name.iso" \;
+          sudo sh -c "cd target/molt/images/dist && sha256sum $name.iso >>$name.SHA256SUMS"
 
       - name: Sign and attach to the release
         env:
@@ -334,7 +355,7 @@ jobs:
           # The images were made by root (sudo podman); the signatures go next to them.
           sudo chown -R "$(id -u):$(id -g)" target/molt/images/dist
           cd target/molt/images/dist
-          for file in *.qcow2 *.raw.zst *.SHA256SUMS; do
+          for file in *.qcow2 *.raw.zst *.iso *.SHA256SUMS; do
             cosign sign-blob --yes --bundle "$file.sigstore.json" "$file" >/dev/null
           done
           # Both architectures run at once; whichever is second finds the
