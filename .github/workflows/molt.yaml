@@ -322,6 +322,8 @@ jobs:
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
+          # The images were made by root (sudo podman); the signatures go next to them.
+          sudo chown -R "$(id -u):$(id -g)" target/molt/images/dist
           cd target/molt/images/dist
           for file in *.qcow2 *.raw.zst *.SHA256SUMS; do
             cosign sign-blob --yes --bundle "$file.sigstore.json" "$file" >/dev/null
