@@ -152,10 +152,8 @@ async fn default_device() -> String {
             .await
             .unwrap_or_default(),
     );
-    route[0]["dev"]
-        .as_str()
-        .map(str::to_owned)
-        .unwrap_or_else(|| {
+    route[0]["dev"].as_str().map_or_else(
+        || {
             std::fs::read_dir("/sys/class/net")
                 .into_iter()
                 .flatten()
@@ -163,7 +161,9 @@ async fn default_device() -> String {
                 .find(|e| e.path().join("device").exists() && !e.path().join("wireless").exists())
                 .map(|e| e.file_name().to_string_lossy().into_owned())
                 .unwrap_or_default()
-        })
+        },
+        str::to_owned,
+    )
 }
 
 async fn nm_facts(device: &str) -> NmFacts {
