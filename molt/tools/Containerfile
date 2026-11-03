@@ -1,10 +1,11 @@
 # QEMU and UEFI firmware for booting Molt disk images, the same way on Linux,
 # macOS (inside the podman machine) and CI, and for packaging release disk
-# images (package-images). Built by `cargo xtask molt`.
+# images (package-images). Built by `cargo xtask molt`. The virtio display
+# (a separate package in Fedora) gives the VM a screen for screenshots.
 FROM quay.io/fedora/fedora:45@sha256:c15d8d6067038f1d6b10d8e1b8440f787a474fe6dc641ef77a5c74b1bf01a05d
 RUN case "$(uname -m)" in \
-        x86_64) pkgs="qemu-system-x86-core edk2-ovmf zstd" ;; \
-        aarch64) pkgs="qemu-system-aarch64-core edk2-aarch64 zstd" ;; \
+        x86_64) pkgs="qemu-system-x86-core edk2-ovmf zstd qemu-device-display-virtio-vga" ;; \
+        aarch64) pkgs="qemu-system-aarch64-core edk2-aarch64 zstd qemu-device-display-virtio-gpu-pci" ;; \
         *) echo "unsupported architecture $(uname -m)" >&2; exit 1 ;; \
     esac \
     && dnf -y install --setopt=install_weak_deps=False $pkgs \
