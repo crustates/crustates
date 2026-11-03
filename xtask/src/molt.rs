@@ -283,9 +283,9 @@ fn upgrade_test(api: &Api, serial: &mut Serial, a: &str, b: &str, bad: &str) -> 
     let node = api.node()?;
     push("localhost/crustates/molt:dev-test-b")?;
     serial.skip_to_end();
-    let message = api.upgrade(&node, true)?;
-    println!("upgrade to {b}: {message}");
+    api.upgrade(&node, b)?;
     serial.wait_for_pass(b, false)?;
+    api.audited_upgrade()?;
     let molt = api.molt(&node)?;
     expect(&molt, "/booted/version", b)?;
     expect(&molt, "/rollback/version", a)?;
@@ -295,10 +295,10 @@ fn upgrade_test(api: &Api, serial: &mut Serial, a: &str, b: &str, bad: &str) -> 
 
     push("localhost/crustates/molt:dev-test-bad")?;
     serial.skip_to_end();
-    let message = api.upgrade(&node, true)?;
-    println!("upgrade to {bad}: {message}");
+    api.upgrade(&node, bad)?;
     // B-bad fails its health check and greenboot rolls back: B boots again.
     serial.wait_for_pass(b, true)?;
+    api.audited_upgrade()?;
     let molt = api.molt(&node)?;
     expect(&molt, "/booted/version", b)?;
     if molt["bad_digests"].as_array().is_none_or(Vec::is_empty) {
@@ -450,20 +450,21 @@ impl Api {
         Ok(())
     }
 
-    /// Calls the API; returns the body of a success or of an error.
+    /// Calls the API; returns the body of a success or of an error. Only
+    /// GET is retried: a POST may have run although its answer was lost.
     fn call(&self, method: &str, path: &str, body: &str) -> anyhow::Result<String> {
-        let mut args = vec![
-            "-sS".to_owned(),
-            "--retry".into(),
-            "5".into(),
-            "--retry-all-errors".into(),
+        let mut args = vec!["-sS".to_owned()];
+        if method == "GET" {
+            args.extend(["--retry".into(), "5".into(), "--retry-all-errors".into()]);
+        }
+        args.extend([
             "--max-time".into(),
             UPGRADE_TIMEOUT_SECS.to_string(),
             "-X".into(),
             method.into(),
             "-H".into(),
             format!("Authorization: Bearer {}", self.token),
-        ];
+        ]);
         if !body.is_empty() {
             args.extend([
                 "-H".into(),
@@ -505,16 +506,40 @@ impl Api {
         Ok(molt)
     }
 
-    fn upgrade(&self, node: &str, reboot: bool) -> anyhow::Result<String> {
-        let body = format!(r#"{{"reboot":{reboot}}}"#);
-        let answer: serde_json::Value = serde_json::from_str(&self.call(
-            "POST",
-            &format!("/v1/nodes/{node}/molt/upgrade"),
-            &body,
-        )?)?;
+    /// Asks the node to stage the channel's image and reboot into it.
+    fn upgrade(&self, node: &str, version: &str) -> anyhow::Result<()> {
+        let path = format!("/v1/nodes/{node}/molt/upgrade");
+        let answer = match self.call("POST", &path, r#"{"reboot":true}"#) {
+            Ok(answer) => answer,
+            // The agent stages and reboots whether or not the answer gets
+            // back; on macOS the podman machine's port forward has dropped
+            // such long requests. The audit log shows the outcome later.
+            Err(e) => {
+                println!(
+                    "warning: the upgrade request lost its answer ({e}); waiting for the reboot"
+                );
+                return Ok(());
+            }
+        };
+        let answer: serde_json::Value = serde_json::from_str(&answer)?;
         match answer["message"].as_str() {
-            Some(message) if message.starts_with("staged") => Ok(message.to_owned()),
+            Some(message) if message.starts_with("staged") => {
+                println!("upgrade to {version}: {message}");
+                Ok(())
+            }
             _ => bail!("the upgrade did not stage an image: {answer}"),
+        }
+    }
+
+    /// Checks that the last upgrade request worked, by the audit log.
+    fn audited_upgrade(&self) -> anyhow::Result<()> {
+        let log = self.json("/v1/audit?limit=20")?;
+        let last = log["items"]
+            .as_array()
+            .and_then(|items| items.iter().find(|e| e["action"] == "molt.upgrade"));
+        match last {
+            Some(entry) if entry["outcome"] == "ok" => Ok(()),
+            _ => bail!("the audit log has no successful molt.upgrade: {log}"),
         }
     }
 }
