@@ -1,0 +1,29 @@
+---
+source: crates/crust-console/src/screens.rs
+expression: "render(&app, width, height)"
+---
+ Crustates recovery console  Crustates 0.2.0  tty1  local acce 2026-11-03 21:45 
+ ┌ Status ────────────────────────────────────────────────────────────────────┐ 
+ │                                                                            │ 
+ │ Open the API reference in a browser:                                       │ 
+ │                                                                            │ 
+ │   http://10.0.10.2:8080/docs                                               │ 
+ │   or log in with the CLI: crust login --api http://10.0.10.2:8080          │ 
+ │      ┌──────────────────────────────────────────────────────────────┐      │ 
+ │ ● API│                                                              │      │ 
+ │ ● Age│  New admin token                                             │      │ 
+ │ ● Poo│                                                              │      │ 
+ │ ● Upd│        crt_EEEEE-FFFFF-GGGGG-HHHHH                           │      │ 
+ │   Net│                                                              │      │ 
+ │ ─────│  The old token no longer works. Log in again with crust      │      │ 
+ │ Recov│  login.                                                      │      │ 
+ │  1  S│  This is the only time the token is shown.                   │      │ 
+ │  2  R└──────────────────────────────────────────────────────────────┘      │ 
+ │  3  Roll back to previous OS (Molt: 0.1.0)                                 │ 
+ │  4  Make a new admin token                                                 │ 
+ │  5  Show diagnostics                                                       │ 
+ │  6  Reboot                                                                 │ 
+ │  7  Shut down                                                              │ 
+ │ Actions 2, 3, 4, 6 and 7 ask for the recovery PIN shown at the first boot. │ 
+ └────────────────────────────────────────────────────────────────────────────┘ 
+  enter  close

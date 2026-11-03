@@ -1,0 +1,29 @@
+---
+source: crates/crust-console/src/screens.rs
+expression: "render(&app, width, height)"
+---
+ Molt  Crustates 0.2.0  tty1  boot                             2026-11-03 21:45 
+ ┌ If checks fail ────────────────────────────────────────────────────────────┐ 
+ │                                                                            │ 
+ │ ✗  Health checks failed                                                    │ 
+ │                                                                            │ 
+ │    Rolling back to 0.1.0 automatically.                                    │ 
+ │                                                                            │ 
+ │ Reason                                                                     │ 
+ │ ✗ crust-agent    did not become ready in 300 s                             │ 
+ │                                                                            │ 
+ │ The machine reboots into 0.1.0 now.                                        │ 
+ │                                                                            │ 
+ │ After the rollback:                                                        │ 
+ │   · your pools and their data are untouched                                │ 
+ │   · 0.2.0 is marked bad and not installed again                            │ 
+ │   · the system log keeps what happened (alt+f2)                            │ 
+ │                                                                            │ 
+ │                                                                            │ 
+ │                                                                            │ 
+ │                                                                            │ 
+ │                                                                            │ 
+ │                                                                            │ 
+ │                                                                            │ 
+ └────────────────────────────────────────────────────────────────────────────┘ 
+  alt+f2  system log   esc  hide

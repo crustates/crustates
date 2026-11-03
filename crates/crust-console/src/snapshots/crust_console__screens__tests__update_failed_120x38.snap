@@ -1,0 +1,42 @@
+---
+source: crates/crust-console/src/screens.rs
+expression: "render(&app, width, height)"
+---
+ Molt  Crustates 0.2.0  tty1  boot                                                                     2026-11-03 21:45 
+                                                                                                                        
+ ┌ Booting Crustates 0.2.0 ────────────────────┐ ┌ If checks fail ────────────────────────────────────────────────────┐ 
+ │                                             │ │                                                                    │ 
+ │ The update installed 0.2.0.                 │ │ ✗  Health checks failed                                            │ 
+ │ 0.1.0 stays for rollback.                   │ │                                                                    │ 
+ │                                             │ │    Rolling back to 0.1.0 automatically.                            │ 
+ │ Health checks                               │ │                                                                    │ 
+ │ ✓ crust-api      ready                      │ │ Reason                                                             │ 
+ │ ✗ crust-agent    did not become ready in    │ │ ✗ crust-agent    did not become ready in 300 s                     │ 
+ │ 300 s                                       │ │                                                                    │ 
+ │ ○ ZFS pools      waiting                    │ │ The machine reboots into 0.1.0 now.                                │ 
+ │ ○ network        waiting                    │ │                                                                    │ 
+ │                                             │ │ After the rollback:                                                │ 
+ │ ██████░░░░░░░░░░░░░░░░░░   1 of 4           │ │   · your pools and their data are untouched                        │ 
+ │                                             │ │   · 0.2.0 is marked bad and not installed again                    │ 
+ │ If a check fails within 5 minutes, Molt     │ │   · the system log keeps what happened (alt+f2)                    │ 
+ │ rolls back to 0.1.0 by itself. Nothing for  │ │                                                                    │ 
+ │ you to do.                                  │ │                                                                    │ 
+ │                                             │ │                                                                    │ 
+ │                                             │ │                                                                    │ 
+ │                                             │ │                                                                    │ 
+ │                                             │ │                                                                    │ 
+ │                                             │ │                                                                    │ 
+ │                                             │ │                                                                    │ 
+ │                                             │ │                                                                    │ 
+ │                                             │ │                                                                    │ 
+ │                                             │ │                                                                    │ 
+ │                                             │ │                                                                    │ 
+ │                                             │ │                                                                    │ 
+ │                                             │ │                                                                    │ 
+ │                                             │ │                                                                    │ 
+ │                                             │ │                                                                    │ 
+ │                                             │ │                                                                    │ 
+ │                                             │ │                                                                    │ 
+ └─────────────────────────────────────────────┘ └────────────────────────────────────────────────────────────────────┘ 
+                                                                                                                        
+  alt+f2  system log   esc  hide

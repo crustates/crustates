@@ -1,0 +1,42 @@
+---
+source: crates/crust-console/src/screens.rs
+expression: "render(&app, width, height)"
+---
+ Diagnostics  Crustates 0.2.0  tty1  local access only                                                 2026-11-03 21:45 
+                                                                                                                        
+ ┌ Services ───────────────────────────────────────────────┐ ┌ This boot ─────────────────────────────────────────────┐ 
+ │                                                         │ │                                                        │ 
+ │ ● crust-api       running    up 3d 4h                   │ │ Image       0.2.0  sha256:4f2a9c01d3e5  signature      │ 
+ │ ● crust-agent     running    up 3d 4h                   │ │ verified                                               │ 
+ │ ● NetworkManager  running    up 3d 4h                   │ │ Previous    0.1.0  kept for rollback                   │ 
+ │ ● chronyd         running    up 3d 4h                   │ │ Booted      2026-10-31 17:41  (3d 4h ago)              │ 
+ │ ● zfs             running    2 pools: tank, fast        │ │ Secure Boot on                                         │ 
+ │                                                         │ │ TPM         2.0                                        │ 
+ │                                                         │ │ Kernel      6.17.4-300.fc45.x86_64  ZFS 2.3.4          │ 
+ │                                                         │ │ Load        0.82 0.74 0.69  RAM 41 / 64 GiB            │ 
+ └─────────────────────────────────────────────────────────┘ └────────────────────────────────────────────────────────┘ 
+ ┌ Disks (SMART) ──────────────────────────────────────────┐ ┌ Tests and support ─────────────────────────────────────┐ 
+ │                                                         │ │                                                        │ 
+ │ DISK      MODEL              TEMP  STATUS               │ │ ✓ link enp3s0              2.5 Gb/s full duplex        │ 
+ │ nvme0n1   Samsung 980 PRO    41°C  ok      boot         │ │ ✓ gateway 10.0.10.1        0.4 ms                      │ 
+ │ sdb       WD Red Plus 4TB    35°C  ok                   │ │ ✓ DNS ghcr.io              12 ms                       │ 
+ │ sdc       WD Red Plus 4TB    36°C  warn                 │ │ ✓ registry ghcr.io:443     reachable                   │ 
+ │                              8 reallocated sectors      │ │ ! NTP chrony               offset 310 ms               │ 
+ │                                                         │ │                                                        │ 
+ │                                                         │ │ Support bundles to a USB stick come in a later         │ 
+ │                                                         │ │ release.                                               │ 
+ │                                                         │ │                                                        │ 
+ │                                                         │ │                                                        │ 
+ │                                                         │ │                                                        │ 
+ │                                                         │ │                                                        │ 
+ │                                                         │ │                                                        │ 
+ │                                                         │ │                                                        │ 
+ │                                                         │ │                                                        │ 
+ │                                                         │ │                                                        │ 
+ │                                                         │ │                                                        │ 
+ │                                                         │ │                                                        │ 
+ │                                                         │ │                                                        │ 
+ │                                                         │ │                                                        │ 
+ └─────────────────────────────────────────────────────────┘ └────────────────────────────────────────────────────────┘ 
+                                                                                                                        
+  r  run tests again   alt+f2  system log   esc  back

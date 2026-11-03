@@ -1,0 +1,42 @@
+---
+source: crates/crust-console/src/screens.rs
+expression: "render(&app, width, height)"
+---
+ Configure network  Crustates 0.2.0  tty1  changes need the recovery PIN                               2026-11-03 21:45 
+                                                                                                                        
+ ┌ Interfaces ─────────────────────────────────┐ ┌ enp3s0 ────────────────────────────────────────────────────────────┐ 
+ │                                             │ │                                                                    │ 
+ │ NAME     LINK    SPEED    MAC               │ │ Address    (o) DHCP    ( ) Static                                  │ 
+ │ enp3s0   up      2.5 Gb/s a8:a1:59:3c:10:02 │ │                                                                    │ 
+ │ enp4s0   down    -        a8:a1:59:3c:10:03 │ │   IPv4 address   10.0.10.2/24______                                │ 
+ │ wlp2s0   ignored -        wifi, unused      │ │   Gateway        10.0.10.1_________                                │ 
+ │                                             │ │   IPv6           automatic (SLAAC)                                 │ 
+ │ The API is reached on enp3s0.               │ │                                                                    │ 
+ │ Bridges, bonds and VLANs for workloads come │ │ DNS                                                                │ 
+ │ with Current.                               │ │   Servers        10.0.10.53________                                │ 
+ │                                             │ │   Search domain  home.arpa_________                                │ 
+ │ ─────────────────────────────────────────── │ │                                                                    │ 
+ │ Test connection                             │ │ Host                                                               │ 
+ │ ✓ link      enp3s0  2.5 Gb/s full duplex    │ │   Hostname       node-1____________                                │ 
+ │ ✓ gateway   10.0.10.1  0.4 ms               │ │   VLAN tag       __________________                                │ 
+ │ ✓ DNS       ghcr.io  12 ms                  │ │                                                                    │ 
+ │ ✓ registry  ghcr.io:443  reachable          │ │ ────────────────────────────────────────────────────────────       │ 
+ │ ! NTP       chrony  offset 310 ms           │ │ !  Applying may disconnect the CLI and other API clients.          │ 
+ │                                             │ │    It reverts in 60 s unless you press  c  here to keep it.        │ 
+ │                                             │ │                                                                    │ 
+ │                                             │ │    [ Apply ]   [ Test only ]   [ Reset to DHCP ]                   │ 
+ │                                             │ │                                                                    │ 
+ │                                             │ │                                                                    │ 
+ │                                             │ │                                                                    │ 
+ │                                             │ │                                                                    │ 
+ │                                             │ │                                                                    │ 
+ │                                             │ │                                                                    │ 
+ │                                             │ │                                                                    │ 
+ │                                             │ │                                                                    │ 
+ │                                             │ │                                                                    │ 
+ │                                             │ │                                                                    │ 
+ │                                             │ │                                                                    │ 
+ │                                             │ │                                                                    │ 
+ └─────────────────────────────────────────────┘ └────────────────────────────────────────────────────────────────────┘ 
+                                                                                                                        
+  tab  next field   up/down  interface   t  test   a  apply   esc  back

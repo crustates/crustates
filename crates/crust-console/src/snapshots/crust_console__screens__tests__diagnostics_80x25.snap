@@ -1,0 +1,29 @@
+---
+source: crates/crust-console/src/screens.rs
+expression: "render(&app, width, height)"
+---
+ Diagnostics  Crustates 0.2.0  tty1  local access only         2026-11-03 21:45 
+ ┌ Services ───────────────────────────┐ ┌ This boot ─────────────────────────┐ 
+ │                                     │ │                                    │ 
+ │ ● crust-api       running    up 3d  │ │ Image       0.2.0                  │ 
+ │ 4h                                  │ │ sha256:4f2a9c01d3e5  signature     │ 
+ │ ● crust-agent     running    up 3d  │ │ verified                           │ 
+ │ 4h                                  │ │ Previous    0.1.0  kept for        │ 
+ │ ● NetworkManager  running    up 3d  │ │ rollback                           │ 
+ │ 4h                                  │ │ Booted      2026-10-31 17:41  (3d  │ 
+ │ ● chronyd         running    up 3d  │ │ 4h ago)                            │ 
+ │ 4h                                  │ │ Secure Boot on                     │ 
+ └─────────────────────────────────────┘ └────────────────────────────────────┘ 
+ ┌ Disks (SMART) ──────────────────────┐ ┌ Tests and support ─────────────────┐ 
+ │                                     │ │                                    │ 
+ │ DISK      MODEL              TEMP   │ │ ✓ link enp3s0              2.5     │ 
+ │ STATUS                              │ │ Gb/s full duplex                   │ 
+ │ nvme0n1   Samsung 980 PRO    41°C   │ │ ✓ gateway 10.0.10.1        0.4 ms  │ 
+ │ ok      boot                        │ │ ✓ DNS ghcr.io              12 ms   │ 
+ │ sdb       WD Red Plus 4TB    35°C   │ │ ✓ registry ghcr.io:443             │ 
+ │ ok                                  │ │ reachable                          │ 
+ │ sdc       WD Red Plus 4TB    36°C   │ │ ! NTP chrony               offset  │ 
+ │ warn                                │ │ 310 ms                             │ 
+ │                              8      │ │ Support bundles to a USB stick     │ 
+ └─────────────────────────────────────┘ └────────────────────────────────────┘ 
+  r  run tests again   alt+f2  system log   esc  back

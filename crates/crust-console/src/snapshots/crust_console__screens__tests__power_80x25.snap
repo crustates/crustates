@@ -1,0 +1,29 @@
+---
+source: crates/crust-console/src/screens.rs
+expression: "render(&app, width, height)"
+---
+ Crustates recovery console  Crustates 0.2.0  tty1  local acce 2026-11-03 21:45 
+ ┌ Status ────────────────────────────────────────────────────────────────────┐ 
+ │                                                                            │ 
+ │ Open the API reference in a browser:                                       │ 
+ │                                                                            │ 
+ │   http://10.0.10.2:8080/docs                                               │ 
+ │   or log in with the CLI: crust login --api http://10.0.10.2:8080          │ 
+ │      ┌──────────────────────────────────────────────────────────────┐      │ 
+ │ ● API│                                                              │      │ 
+ │ ● Age│  Reboot or shut down node-1?                                 │      │ 
+ │ ● Poo│                                                              │      │ 
+ │ ● Upd│  Nothing else runs on this node yet: apps and VMs come with  │      │ 
+ │   Net│  Tide.                                                       │      │ 
+ │ ─────│                                                              │      │ 
+ │ Recov│  The API and the agent stop and start again after a reboot.  │      │ 
+ │  1  S│                                                              │      │ 
+ │  2  R│      Reboot    [ Shut down ]   [ Cancel ]                    │      │ 
+ │  3  R└──────────────────────────────────────────────────────────────┘      │ 
+ │  4  Make a new admin token                                                 │ 
+ │  5  Show diagnostics                                                       │ 
+ │  6  Reboot                                                                 │ 
+ │  7  Shut down                                                              │ 
+ │ Actions 2, 3, 4, 6 and 7 ask for the recovery PIN shown at the first boot. │ 
+ └────────────────────────────────────────────────────────────────────────────┘ 
+  left/right  choose   enter  confirm with PIN   esc  cancel
