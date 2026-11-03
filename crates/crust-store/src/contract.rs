@@ -200,7 +200,7 @@ async fn watch_sees_changes_in_order<S: Store>(store: &S) {
 }
 
 async fn audit_log_is_newest_first_and_limited<S: Store>(store: &S) {
-    assert!(store.audit_log(10).await.expect("empty log").is_empty());
+    assert_eq!(store.audit_log(10).await.expect("empty log"), []);
     // Equal times: the order of writing decides.
     let time = jiff::Timestamp::now();
     for action in ["first", "second", "third"] {
