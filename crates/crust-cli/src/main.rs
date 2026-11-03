@@ -6,7 +6,7 @@ use std::path::PathBuf;
 
 use anyhow::{Context, bail};
 use clap::{Parser, Subcommand};
-use crust_types::{ConditionStatus, MoltImage, MoltStatus, Node, UpdatePolicy};
+use crust_types::{CHANNELS, ConditionStatus, MoltImage, MoltStatus, Node, UpdatePolicy};
 use serde::{Deserialize, Serialize};
 
 /// The API when neither `--api` nor a login names one.
@@ -78,6 +78,11 @@ enum MoltCommand {
         #[command(subcommand)]
         command: PolicyCommand,
     },
+    /// Change the channel the node follows.
+    Channel {
+        #[command(subcommand)]
+        command: ChannelCommand,
+    },
     /// Queue the Crustates module-signing key for Secure Boot (MOK).
     ///
     /// Someone at the machine confirms it at the next boot with the one-time
@@ -95,6 +100,22 @@ enum PolicyCommand {
         /// When auto may reboot, HH:MM-HH:MM in the node's local time.
         #[arg(long)]
         window: Option<String>,
+    },
+}
+
+#[derive(Debug, Subcommand)]
+enum ChannelCommand {
+    /// stable: releases after a week on beta. beta: every release.
+    /// development: every merge. The node checks the channel at once; with
+    /// the auto policy it stages a newer image there right away.
+    Set {
+        /// The channel.
+        #[arg(value_parser = CHANNELS)]
+        channel: String,
+        /// Switch even if the channel holds an older version than the node
+        /// runs. An older version may not read what a newer one wrote.
+        #[arg(long)]
+        allow_downgrade: bool,
     },
 }
 
@@ -354,6 +375,21 @@ async fn molt(client: &Client, node: Option<String>, command: MoltCommand) -> an
                 .await?;
             println!("{}", outcome.message);
         }
+        MoltCommand::Channel {
+            command:
+                ChannelCommand::Set {
+                    channel,
+                    allow_downgrade,
+                },
+        } => {
+            eprintln!("Checking {channel} for {node}; downloading a new image can take minutes…");
+            let body =
+                serde_json::json!({ "channel": channel, "allow_downgrade": allow_downgrade });
+            let outcome: Outcome = client
+                .send(reqwest::Method::PUT, &path("channel"), Some(body))
+                .await?;
+            println!("{}", outcome.message);
+        }
         MoltCommand::EnrollKey => {
             let enrolment: Enrolment = client.send(post, &path("enroll-key"), None).await?;
             println!("{}.", enrolment.message);
@@ -383,7 +419,11 @@ fn molt_table(node: &str, m: &MoltStatus) -> String {
     let mut rows = vec![("Node", node.to_owned())];
     rows.push((
         "Channel",
-        format!("{} ({}:{})", m.channel, m.repository, m.channel),
+        if m.channel.is_empty() {
+            "not picked yet: the first check picks stable or beta".into()
+        } else {
+            format!("{} ({}:{})", m.channel, m.repository, m.channel)
+        },
     ));
     rows.push((
         "Policy",

@@ -139,6 +139,13 @@ async fn run(program: &'static str, path: &str, args: &[&str]) -> Result<Vec<u8>
             program,
             message: e.to_string(),
         })?;
+    // skopeo exits with 2 only when the image does not exist.
+    if program == "skopeo" && output.status.code() == Some(2) {
+        let reference = args
+            .last()
+            .map_or("", |a| a.trim_start_matches("docker://"));
+        return Err(Error::NotFound(reference.to_owned()));
+    }
     if !output.status.success() {
         return Err(Error::Command {
             program,

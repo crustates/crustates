@@ -3,14 +3,15 @@
 //! images with `bootc switch` by digest. With the `auto` policy it reboots
 //! into them inside the update window; with `manual` it only reports them.
 //! greenboot rolls back an image that fails its health check, and the
-//! agent then never stages that digest again.
+//! agent then never stages that digest again. A node follows one channel
+//! (ADR 0017); its first check picks `stable` or `beta`.
 
 use std::future::Future;
 use std::path::{Path, PathBuf};
 use std::sync::{Arc, Mutex};
 use std::time::Duration;
 
-use crust_types::{MoltImage, MoltStatus, UpdatePolicy, Window};
+use crust_types::{CHANNELS, MoltImage, MoltStatus, UpdatePolicy, Window};
 use figment::Figment;
 use figment::providers::{Format, Toml};
 use jiff::{Timestamp, Zoned};
@@ -46,6 +47,9 @@ pub enum Error {
         /// What did not fit.
         message: String,
     },
+    /// The registry has no such image.
+    #[error("{0} does not exist")]
+    NotFound(String),
     /// The update settings are invalid.
     #[error("invalid update settings: {0}")]
     Settings(String),
@@ -110,7 +114,8 @@ impl Resolved {
 pub trait Os: Send + Sync + 'static {
     /// The booted, staged and rollback deployments.
     fn deployments(&self) -> impl Future<Output = Result<Deployments, Error>> + Send;
-    /// Resolves `repository:tag` in the registry.
+    /// Resolves `repository:tag` in the registry; [`Error::NotFound`] if the
+    /// tag does not exist.
     fn resolve(
         &self,
         repository: &str,
@@ -137,8 +142,9 @@ pub trait Os: Send + Sync + 'static {
 pub struct Settings {
     /// The image repository, for example `ghcr.io/crustates/molt`.
     pub repository: String,
-    /// The channel: the tag to follow.
-    pub channel: String,
+    /// The channel: the tag to follow. `None` until the first check picks
+    /// one.
+    pub channel: Option<String>,
     /// When updates are applied.
     pub policy: UpdatePolicy,
     /// When `auto` may reboot, `HH:MM-HH:MM` in local time.
@@ -164,8 +170,8 @@ impl Settings {
 pub struct Paths {
     /// The image's settings, `/usr/lib/crustates/molt.toml`.
     pub defaults: PathBuf,
-    /// Local settings, `/etc/crustates/molt.toml`; `crust molt policy`
-    /// writes it.
+    /// Local settings, `/etc/crustates/molt.toml`; `crust molt policy` and
+    /// `crust molt channel` write it, and so does the first check.
     pub overrides: PathBuf,
     /// The updater's memory: bad and verified digests.
     pub state: PathBuf,
@@ -242,10 +248,11 @@ impl<O: Os> Updater<O> {
             .map_err(|e| Error::Settings(e.to_string()))?;
         settings.window()?;
         let tag_char = |c: char| c.is_ascii_alphanumeric() || "._-".contains(c);
-        if settings.channel.is_empty() || !settings.channel.chars().all(tag_char) {
+        if let Some(channel) = &settings.channel
+            && (channel.is_empty() || !channel.chars().all(tag_char))
+        {
             return Err(Error::Settings(format!(
-                "channel {:?} is not an image tag",
-                settings.channel
+                "channel {channel:?} is not an image tag"
             )));
         }
         Ok(settings)
@@ -300,7 +307,7 @@ impl<O: Os> Updater<O> {
             s.rollback = image(&deployments.rollback);
             s.rollback_queued = deployments.rollback_queued;
             s.repository.clone_from(&settings.repository);
-            s.channel.clone_from(&settings.channel);
+            s.channel = settings.channel.clone().unwrap_or_default();
             s.policy = settings.policy;
             s.window.clone_from(&settings.window);
             s.bad_digests.clone_from(&memory.bad);
@@ -320,11 +327,13 @@ impl<O: Os> Updater<O> {
     }
 
     /// Resolves the channel and checks a new image's signature.
-    async fn find(&self, settings: &Settings, deployments: &Deployments) -> Result<Found, Error> {
-        let resolved = self
-            .os
-            .resolve(&settings.repository, &settings.channel)
-            .await?;
+    async fn find(
+        &self,
+        settings: &Settings,
+        channel: &str,
+        deployments: &Deployments,
+    ) -> Result<Found, Error> {
+        let resolved = self.os.resolve(&settings.repository, channel).await?;
         let current = [&deployments.booted, &deployments.staged];
         if current.into_iter().flatten().any(|d| resolved.is(d)) {
             return Ok(Found::UpToDate(resolved));
@@ -358,10 +367,18 @@ impl<O: Os> Updater<O> {
     /// happened, for people.
     async fn check(&self, stage: bool) -> Result<String, Error> {
         let (settings, deployments) = self.refresh().await?;
-        let result = self.find(&settings, &deployments).await;
+        let result = async {
+            let channel = match &settings.channel {
+                Some(channel) => channel.clone(),
+                None => self.choose_channel(&settings, &deployments).await?,
+            };
+            let found = self.find(&settings, &channel, &deployments).await?;
+            Ok::<_, Error>((found, channel))
+        }
+        .await;
         let now = Timestamp::now();
-        let found = match result {
-            Ok(found) => found,
+        let (found, channel) = match result {
+            Ok(both) => both,
             Err(e) => {
                 self.update_status(|s| {
                     s.last_check = Some(now);
@@ -383,8 +400,7 @@ impl<O: Os> Updater<O> {
             }
             Found::Bad(r) => {
                 let message = format!(
-                    "the newest image on {}, {}, failed its health check on this node before; it is not staged again",
-                    settings.channel,
+                    "the newest image on {channel}, {}, failed its health check on this node before; it is not staged again",
                     describe(&r.version, &r.digest)
                 );
                 (message.clone(), None, message)
@@ -459,7 +475,7 @@ impl<O: Os> Updater<O> {
                 describe(&staged.version, &staged.digest)
             );
         }
-        if message.contains("already staged") {
+        if !message.starts_with("staged ") {
             return message;
         }
         match status.policy {
@@ -517,6 +533,112 @@ impl<O: Os> Updater<O> {
         window: Option<Window>,
     ) -> Result<String, Error> {
         let _busy = self.busy.lock().await;
+        let policy = policy.to_string();
+        let window = window.map(|w| w.to_string());
+        let mut entries = vec![("policy", policy.as_str())];
+        if let Some(window) = &window {
+            entries.push(("window", window));
+        }
+        self.write_settings(&entries)?;
+        let (settings, _) = self.refresh().await?;
+        Ok(match settings.policy {
+            UpdatePolicy::Auto => format!(
+                "policy auto: new images are staged when they appear, and the node reboots into them between {} (local time)",
+                settings.window.replacen('-', " and ", 1)
+            ),
+            UpdatePolicy::Manual => {
+                "policy manual: new images are only reported; stage one with crust molt upgrade"
+                    .into()
+            }
+        })
+    }
+
+    /// Makes the node follow `channel`, written to `/etc`, and checks it;
+    /// with the `auto` policy a new image is staged right away.
+    ///
+    /// # Errors
+    ///
+    /// Fails if the channel is unknown or empty, or holds an older image
+    /// than the booted one and `allow_downgrade` is off.
+    pub async fn set_channel(
+        self: &Arc<Self>,
+        channel: &str,
+        allow_downgrade: bool,
+    ) -> Result<String, Error> {
+        let _busy = self.busy.lock().await;
+        if !CHANNELS.contains(&channel) {
+            return Err(Error::Refused(format!(
+                "there is no channel {channel:?}; the channels are {}",
+                CHANNELS.join(", ")
+            )));
+        }
+        let (settings, deployments) = self.refresh().await?;
+        let target = match self.os.resolve(&settings.repository, channel).await {
+            Err(Error::NotFound(_)) => {
+                return Err(Error::Refused(format!("{channel} has no image yet")));
+            }
+            other => other?,
+        };
+        let booted = deployments.booted.as_ref().map_or("", |d| &d.version);
+        let refusal = match downgrade(booted, &target.version) {
+            _ if allow_downgrade => None,
+            Some(false) => None,
+            Some(true) => Some(format!(
+                "{channel} holds {}, older than the running {booted}; an older version may not \
+                 read what a newer one wrote",
+                target.version
+            )),
+            None => Some(format!(
+                "cannot compare the running version {booted:?} with {:?} on {channel}",
+                target.version
+            )),
+        };
+        if let Some(refusal) = refusal {
+            return Err(Error::Refused(format!(
+                "{refusal}. Switch anyway with --allow-downgrade"
+            )));
+        }
+        self.write_settings(&[("channel", channel)])?;
+        info!(channel, "following a new Molt channel");
+        let message = self
+            .check(settings.policy == UpdatePolicy::Auto)
+            .await
+            .map_err(|e| {
+                Error::Refused(format!(
+                    "now following {channel}, but checking it failed: {e}"
+                ))
+            })?;
+        let status = self.status();
+        let mut message = self.finish(message, status.staged.as_ref(), false, &status);
+        if status.available.is_some() {
+            message.push_str("; crust molt upgrade stages it");
+        }
+        Ok(format!("following {channel}; {message}"))
+    }
+
+    /// The channel for a node that has none yet: `stable` if it holds an
+    /// image not older than the booted one, else `beta`. It is written to
+    /// `/etc`, so the node keeps it.
+    async fn choose_channel(
+        &self,
+        settings: &Settings,
+        deployments: &Deployments,
+    ) -> Result<String, Error> {
+        let booted = deployments.booted.as_ref().map_or("", |d| &d.version);
+        // Only a missing tag means "no stable yet"; any other failure retries
+        // at the next check rather than settling on beta for good.
+        let channel = match self.os.resolve(&settings.repository, "stable").await {
+            Ok(stable) if downgrade(booted, &stable.version) == Some(false) => "stable",
+            Ok(_) | Err(Error::NotFound(_)) => "beta",
+            Err(e) => return Err(e),
+        };
+        self.write_settings(&[("channel", channel)])?;
+        info!(channel, "picked the Molt channel");
+        Ok(channel.to_owned())
+    }
+
+    /// Sets `entries` in the local settings in `/etc`, keeping the rest.
+    fn write_settings(&self, entries: &[(&str, &str)]) -> Result<(), Error> {
         let path = &self.paths.overrides;
         let mut table: toml::Table = match std::fs::read_to_string(path) {
             Ok(text) => text
@@ -530,25 +652,13 @@ impl<O: Os> Updater<O> {
                 });
             }
         };
-        table.insert("policy".into(), policy.to_string().into());
-        if let Some(window) = window {
-            table.insert("window".into(), window.to_string().into());
+        for (key, value) in entries {
+            table.insert((*key).into(), (*value).into());
         }
         let text = format!(
-            "# Written by crust molt policy; the image's defaults are in /usr/lib/crustates/molt.toml.\n{table}"
+            "# Written by crust-agent; the image's defaults are in /usr/lib/crustates/molt.toml.\n{table}"
         );
-        write_atomically(path, text.as_bytes())?;
-        let (settings, _) = self.refresh().await?;
-        Ok(match settings.policy {
-            UpdatePolicy::Auto => format!(
-                "policy auto: new images are staged when they appear, and the node reboots into them between {} (local time)",
-                settings.window.replacen('-', " and ", 1)
-            ),
-            UpdatePolicy::Manual => {
-                "policy manual: new images are only reported; stage one with crust molt upgrade"
-                    .into()
-            }
-        })
+        write_atomically(path, text.as_bytes())
     }
 
     /// Queues the module-signing key for enrolment. Returns what to do at
@@ -707,6 +817,15 @@ fn describe(version: &str, digest: &str) -> String {
     }
 }
 
+/// Whether going from version `from` to `to` goes back, by semantic
+/// versioning precedence (build metadata does not count); `None` if either
+/// is not such a version.
+fn downgrade(from: &str, to: &str) -> Option<bool> {
+    let from = semver::Version::parse(from).ok()?;
+    let to = semver::Version::parse(to).ok()?;
+    Some(to.cmp_precedence(&from).is_lt())
+}
+
 /// Writes `bytes` next to `path` and renames it over `path`.
 fn write_atomically(path: &Path, bytes: &[u8]) -> Result<(), Error> {
     let file_error = |source| Error::File {
@@ -744,6 +863,8 @@ pub struct FakeState {
     pub reboots: u32,
     /// Whether Secure Boot is on.
     pub secure_boot: bool,
+    /// Whether the registry cannot be reached.
+    pub offline: bool,
 }
 
 #[cfg(any(test, feature = "fake"))]
@@ -768,11 +889,15 @@ impl Os for FakeOs {
     }
 
     async fn resolve(&self, repository: &str, tag: &str) -> Result<Resolved, Error> {
-        self.with(|s| s.tags.get(&format!("{repository}:{tag}")).cloned())
-            .ok_or_else(|| Error::Command {
+        let reference = format!("{repository}:{tag}");
+        let (offline, resolved) = self.with(|s| (s.offline, s.tags.get(&reference).cloned()));
+        if offline {
+            return Err(Error::Command {
                 program: "skopeo",
-                message: format!("{repository}:{tag}: manifest unknown"),
-            })
+                message: "no such host".into(),
+            });
+        }
+        resolved.ok_or(Error::NotFound(reference))
     }
 
     async fn verify(&self, image: &str) -> Result<(), Error> {
@@ -982,7 +1107,7 @@ mod tests {
         let settings = u.settings().unwrap();
         assert_eq!(settings.policy, UpdatePolicy::Manual);
         assert_eq!(settings.window, "22:00-23:30");
-        assert_eq!(settings.channel, "stable");
+        assert_eq!(settings.channel.as_deref(), Some("stable"));
     }
 
     #[tokio::test]
@@ -1001,6 +1126,118 @@ mod tests {
         u.os.with(|s| s.deployments.rollback = None);
         let err = u.rollback(false).await.unwrap_err();
         assert!(err.to_string().contains("no previous image"));
+    }
+
+    /// An updater whose image names no channel, as on Molt, booting
+    /// `booted`; beta holds 1.1.0, stable `stable`.
+    fn without_channel(dir: &Path, booted: &str, stable: Option<Resolved>) -> Arc<Updater<FakeOs>> {
+        let u = updater(dir, "manual", resolved("1.1.0", "sha256:110"));
+        std::fs::write(
+            &u.paths.defaults,
+            format!("repository = \"{REPO}\"\npolicy = \"manual\"\nwindow = \"03:00-05:00\"\n"),
+        )
+        .unwrap();
+        u.os.with(|s| {
+            s.deployments.booted = Some(deployment(booted, "sha256:b"));
+            if let Some(stable) = stable {
+                s.tags.insert(format!("{REPO}:stable"), stable);
+            }
+        });
+        u
+    }
+
+    #[tokio::test]
+    async fn the_first_check_picks_stable_unless_it_is_missing_or_older() {
+        for (booted, stable, picked) in [
+            ("1.0.0", Some("1.0.0"), "stable"),
+            ("1.0.0", Some("1.0.1"), "stable"),
+            // Installed from a newer beta than stable holds: no downgrade.
+            ("1.1.0", Some("1.0.0"), "beta"),
+            ("1.0.0", None, "beta"),
+        ] {
+            let dir = tempfile::tempdir().unwrap();
+            let stable_image = stable.map(|v| resolved(v, "sha256:s"));
+            let u = without_channel(dir.path(), booted, stable_image);
+            u.refresh().await.unwrap();
+            assert_eq!(u.status().channel, "", "not picked before the first check");
+
+            let noon = "2026-11-03T12:00:00[UTC]".parse::<Zoned>().unwrap();
+            u.tick(&noon, true).await;
+            let case = format!("booted {booted}, stable {stable:?}");
+            assert_eq!(u.status().channel, picked, "{case}");
+            let etc = std::fs::read_to_string(dir.path().join("etc/molt.toml")).unwrap();
+            assert!(
+                etc.contains(&format!("channel = \"{picked}\"")),
+                "{case}: {etc}"
+            );
+        }
+    }
+
+    #[tokio::test]
+    async fn an_unreachable_registry_does_not_settle_the_channel() {
+        let dir = tempfile::tempdir().unwrap();
+        let u = without_channel(dir.path(), "1.0.0", Some(resolved("1.0.0", "sha256:s")));
+        u.os.with(|s| s.offline = true);
+        assert!(u.upgrade(false).await.is_err());
+        assert_eq!(u.settings().unwrap().channel, None);
+        assert!(u.status().last_error.contains("no such host"));
+
+        u.os.with(|s| s.offline = false);
+        u.upgrade(false).await.unwrap();
+        assert_eq!(u.settings().unwrap().channel.as_deref(), Some("stable"));
+    }
+
+    #[tokio::test]
+    async fn switching_channels_refuses_downgrades_unless_allowed() {
+        let dir = tempfile::tempdir().unwrap();
+        let u = updater(dir.path(), "auto", resolved("1.1.0", "sha256:110"));
+        u.os.with(|s| {
+            s.deployments.booted = Some(deployment("1.1.0", "sha256:110"));
+            s.tags
+                .insert(format!("{REPO}:stable"), resolved("1.0.0", "sha256:100"));
+        });
+
+        let err = u.set_channel("nightly", false).await.unwrap_err();
+        assert!(err.to_string().contains("there is no channel"), "{err}");
+        let err = u.set_channel("development", false).await.unwrap_err();
+        assert_eq!(err.to_string(), "development has no image yet");
+        let err = u.set_channel("stable", false).await.unwrap_err();
+        assert!(
+            err.to_string().contains("older than the running 1.1.0"),
+            "{err}"
+        );
+        assert_eq!(u.settings().unwrap().channel.as_deref(), Some("beta"));
+
+        // Newer: allowed, and auto stages it at once.
+        u.os.with(|s| {
+            s.tags.insert(
+                format!("{REPO}:development"),
+                resolved("1.2.0-dev.1", "sha256:120"),
+            );
+        });
+        let message = u.set_channel("development", false).await.unwrap();
+        assert_eq!(
+            message,
+            "following development; staged 1.2.0-dev.1 (sha256:120-index); the node reboots into it between 03:00 and 05:00 (local time)"
+        );
+
+        let message = u.set_channel("stable", true).await.unwrap();
+        assert!(
+            message.starts_with("following stable; staged 1.0.0"),
+            "{message}"
+        );
+        assert_eq!(u.status().channel, "stable");
+        assert_eq!(u.status().staged.unwrap().version, "1.0.0");
+    }
+
+    #[test]
+    fn downgrades_follow_semver_precedence() {
+        assert_eq!(downgrade("0.2.0", "0.1.9"), Some(true));
+        assert_eq!(downgrade("0.1.0", "0.1.0-rc.1"), Some(true));
+        assert_eq!(downgrade("0.1.0-alpha.1", "0.1.0"), Some(false));
+        assert_eq!(downgrade("0.1.0-alpha.1+b", "0.1.0-alpha.1"), Some(false));
+        assert_eq!(downgrade("1.0", "1.0.0"), None);
+        assert_eq!(downgrade("", "1.0.0"), None);
     }
 
     #[test]

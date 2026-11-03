@@ -223,7 +223,8 @@ pub struct MoltStatus {
     pub available: Option<MoltImage>,
     /// The image repository, for example `ghcr.io/crustates/molt`.
     pub repository: String,
-    /// The channel the node follows: the tag it checks for updates.
+    /// The channel the node follows: the tag it checks for updates. Empty
+    /// until the node's first check picks one.
     pub channel: String,
     /// When updates are applied.
     pub policy: UpdatePolicy,
@@ -255,6 +256,11 @@ pub struct MoltImage {
     /// Whether this node checked the image's signature before staging it.
     pub verified: bool,
 }
+
+/// The Molt channels a node can follow, most tested first: `stable` gets
+/// releases after a week on `beta`, `beta` gets every release, and
+/// `development` every merge (ADR 0017).
+pub const CHANNELS: [&str; 3] = ["stable", "beta", "development"];
 
 /// When a node applies Molt updates.
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Serialize, Deserialize, ToSchema)]

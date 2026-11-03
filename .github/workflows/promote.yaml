@@ -1,0 +1,159 @@
+# Promotes a release to the stable channel (ADR 0017): the image the release
+# built and signed is tagged ghcr.io/crustates/molt:stable by digest, without
+# a rebuild, signed again with channel=stable, and its GitHub release becomes
+# the latest full release.
+#
+# Run it by hand on development (Actions, promote, Run workflow); the release
+# environment asks for approval first. It refuses pre-releases, releases
+# published less than seven days ago, and versions older than the current
+# stable. force with a reason skips the last two checks; the reason goes into
+# the release notes. dry-run runs every check and changes nothing.
+name: promote
+
+on:
+  workflow_dispatch:
+    inputs:
+      version:
+        description: The release to promote, for example 0.2.0 (without the v)
+        required: true
+        type: string
+      force:
+        description: Promote although the release is newer than seven days or older than stable
+        type: boolean
+        default: false
+      reason:
+        description: Why, when forcing; goes into the release notes
+        type: string
+        default: ""
+      dry-run:
+        description: Run the checks only; change nothing
+        type: boolean
+        default: false
+
+permissions:
+  contents: read
+
+# bash -eo pipefail: a failing skopeo in a pipe fails the step.
+defaults:
+  run:
+    shell: bash
+
+concurrency:
+  group: promote
+  cancel-in-progress: false
+
+jobs:
+  promote:
+    runs-on: ubuntu-24.04
+    environment: release
+    permissions:
+      # gh release edit.
+      contents: write
+      # The :stable tag.
+      packages: write
+      # Keyless cosign signature with the workflow's GitHub OIDC identity.
+      id-token: write
+    env:
+      VERSION: ${{ inputs.version }}
+      FORCE: ${{ inputs.force }}
+      REASON: ${{ inputs.reason }}
+      DRY_RUN: ${{ inputs.dry-run }}
+      IMAGE: ghcr.io/crustates/molt
+      GH_REPO: ${{ github.repository }}
+    steps:
+      - uses: sigstore/cosign-installer@6f9f17788090df1f26f669e9d70d6ae9567deba6 # v4.1.2
+
+      - name: Check the release
+        id: check
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          fail() {
+            echo "::error::$1"
+            exit 1
+          }
+          # Nodes accept promote.yaml signatures from development only (ADR 0016).
+          [ "$GITHUB_REF" = refs/heads/development ] || fail "run this on development, not $GITHUB_REF"
+          if [[ "$VERSION" =~ ^[0-9]+\.[0-9]+\.[0-9]+-  ]]; then
+            fail "$VERSION is a pre-release; stable takes releases only"
+          fi
+          [[ "$VERSION" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]] || fail "$VERSION is not a version like 1.2.3"
+          if [ "$FORCE" = true ] && [ -z "${REASON// /}" ]; then
+            fail "force needs a reason"
+          fi
+          forced=""
+
+          release=$(gh release view "v$VERSION" --json isDraft,publishedAt) || fail "there is no release v$VERSION"
+          [ "$(jq -r .isDraft <<<"$release")" = false ] || fail "v$VERSION is a draft"
+          published=$(jq -r .publishedAt <<<"$release")
+          days=$((($(date +%s) - $(date -d "$published" +%s)) / 86400))
+          echo "v$VERSION was published $published, $days days ago."
+          if [ "$days" -lt 7 ]; then
+            [ "$FORCE" = true ] || fail "v$VERSION has been on beta for $days days; stable takes releases after 7"
+            forced="on beta for $days days, not 7"
+          fi
+
+          digest=$(skopeo inspect --raw "docker://$IMAGE:$VERSION" | sha256sum | cut -d' ' -f1) ||
+            fail "there is no image $IMAGE:$VERSION"
+          digest="sha256:$digest"
+          # The image the release workflow built for this tag, nothing else.
+          cosign verify "$IMAGE@$digest" \
+            --certificate-identity "https://github.com/$GITHUB_REPOSITORY/.github/workflows/molt.yaml@refs/tags/v$VERSION" \
+            --certificate-oidc-issuer https://token.actions.githubusercontent.com >/dev/null
+          echo "$IMAGE:$VERSION is $digest, signed by the v$VERSION release."
+
+          if skopeo inspect --raw "docker://$IMAGE:stable" >"$RUNNER_TEMP/stable.json" 2>"$RUNNER_TEMP/stable.err"; then
+            current_digest="sha256:$(sha256sum <"$RUNNER_TEMP/stable.json" | cut -d' ' -f1)"
+            current_version=$(skopeo inspect --format '{{index .Labels "org.opencontainers.image.version"}}' "docker://$IMAGE@$current_digest")
+            echo "stable holds $current_version ($current_digest)."
+            if [ "$current_digest" = "$digest" ]; then
+              echo "v$VERSION is stable already; nothing to do." >>"$GITHUB_STEP_SUMMARY"
+              echo "done=true" >>"$GITHUB_OUTPUT"
+              exit 0
+            fi
+            if [ "$(printf '%s\n' "$current_version" "$VERSION" | sort -V | tail -n 1)" != "$VERSION" ]; then
+              [ "$FORCE" = true ] || fail "stable holds $current_version, newer than $VERSION; every stable node would go back"
+              forced="${forced:+$forced; }replaced the newer $current_version"
+            fi
+          elif grep -q 'manifest unknown' "$RUNNER_TEMP/stable.err"; then
+            echo "stable has no image yet."
+          else
+            cat "$RUNNER_TEMP/stable.err"
+            fail "cannot read $IMAGE:stable"
+          fi
+
+          {
+            echo "digest=$digest"
+            echo "forced=$forced"
+          } >>"$GITHUB_OUTPUT"
+          echo "Promote v$VERSION ($digest) to stable${forced:+ (forced: $forced)}." >>"$GITHUB_STEP_SUMMARY"
+
+      - name: Tag, sign and release
+        if: steps.check.outputs.done != 'true' && env.DRY_RUN != 'true'
+        env:
+          TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          DIGEST: ${{ steps.check.outputs.digest }}
+          FORCED: ${{ steps.check.outputs.forced }}
+        run: |
+          printf '%s' "$TOKEN" | skopeo login ghcr.io --username "$GITHUB_ACTOR" --password-stdin
+          printf '%s' "$TOKEN" | cosign login ghcr.io --username "$GITHUB_ACTOR" --password-stdin
+          # Same repository, same bytes: --preserve-digests fails rather than
+          # rewrite a manifest.
+          skopeo copy --all --preserve-digests "docker://$IMAGE@$DIGEST" "docker://$IMAGE:stable"
+          stable="sha256:$(skopeo inspect --raw "docker://$IMAGE:stable" | sha256sum | cut -d' ' -f1)"
+          if [ "$stable" != "$DIGEST" ]; then
+            echo "::error::$IMAGE:stable is $stable, not $DIGEST"
+            exit 1
+          fi
+          cosign sign --yes --recursive -a channel=stable "$IMAGE@$DIGEST"
+
+          gh release view "v$VERSION" --json body --jq .body >"$RUNNER_TEMP/notes.md"
+          {
+            printf '\n\n## Stable\n\nPromoted to the stable channel on %s.\n' "$(date -u +%F)"
+            if [ -n "$FORCED" ]; then
+              printf '\nForced (%s). Reason: %s\n' "$FORCED" "$REASON"
+            fi
+          } >>"$RUNNER_TEMP/notes.md"
+          gh release edit "v$VERSION" --prerelease=false --latest --notes-file "$RUNNER_TEMP/notes.md"
+          echo "Promoted v$VERSION to $IMAGE:stable ($DIGEST)." >>"$GITHUB_STEP_SUMMARY"

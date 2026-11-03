@@ -293,15 +293,17 @@ jobs:
         run: |
           image=ghcr.io/crustates/molt
           printf '%s' "$TOKEN" | sudo podman login ghcr.io --username "$GITHUB_ACTOR" --password-stdin
-          printf '%s' "$TOKEN" | skopeo login ghcr.io --username "$GITHUB_ACTOR" --password-stdin
-          digest=$(skopeo inspect --raw "docker://$image:${GITHUB_REF_NAME#v}" |
+          # One login, as root: sudo keeps XDG_RUNTIME_DIR, so root's auth.json
+          # lands in the runner user's runtime dir, unreadable without sudo.
+          digest=$(sudo skopeo inspect --raw "docker://$image:${GITHUB_REF_NAME#v}" |
             jq -r --arg arch "$ARCH" '.manifests[] | select(.platform.architecture == $arch) | .digest')
           cosign verify "$image@$digest" \
             --certificate-identity "https://github.com/${GITHUB_REPOSITORY}/.github/workflows/molt.yaml@${GITHUB_REF}" \
             --certificate-oidc-issuer https://token.actions.githubusercontent.com >/dev/null
           sudo podman pull "$image@$digest"
-          # Installed machines follow the image name they were built from, so
-          # build from the channel name, pointing at the digest verified above.
+          # bootc records the name the disk image was built from; the agent
+          # follows the channel in molt.toml instead (ADR 0017), so the name
+          # only shows in `bootc status` until the first update.
           sudo podman tag "$image@$digest" "$image:beta"
           echo "ref=$image:beta" >>"$GITHUB_OUTPUT"
 

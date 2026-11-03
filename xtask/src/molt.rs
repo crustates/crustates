@@ -289,6 +289,8 @@ fn upgrade_test(api: &Api, serial: &mut Serial, a: &str, b: &str, bad: &str) -> 
     let molt = api.molt(&node)?;
     expect(&molt, "/booted/version", b)?;
     expect(&molt, "/rollback/version", a)?;
+    // Picked by the first check: the test registry has no :stable.
+    expect(&molt, "/channel", "beta")?;
     if molt["automatic_rollback"] != true {
         bail!("automatic rollback is off after the upgrade: {molt}");
     }

@@ -2,7 +2,8 @@
 # test` runs next to the VM (the host is 10.0.2.2 for the guest). Its images
 # are unsigned, and the test decides when to upgrade.
 repository = "10.0.2.2:5000/crustates/molt"
-channel = "beta"
+# No channel, as on Molt: the registry has no :stable, so the first check
+# picks beta (ADR 0017).
 policy = "manual"
 window = "03:00-05:00"
 verify_signatures = false
