@@ -1,0 +1,42 @@
+---
+source: crates/crust-console/src/screens.rs
+expression: "render(&app, width, height)"
+---
+ Crustates recovery console  Crustates 0.2.0  tty1  local access only                                  2026-11-03 21:45 
+                                                                                                                        
+ ┌ node-1 ─────────────────────────────────────┐ ┌ Status ────────────────────────────────────────────────────────────┐ 
+ │                                             │ │                                                                    │ 
+ │                                             │ │ Open the API reference in a browser:                               │ 
+ │                                             │ │                                                                    │ 
+ │                                             │ │   http://10.0.10.2:8080/docs                                       │ 
+ │                                             │ │   or log in with the CLI: crust login --api http://10.0.10.2:8080  │ 
+ │                                             │ │                                                                    │ 
+ │                                             │ │ ● API           running                                            │ 
+ │                                             │ │ ● Agent         running                                            │ 
+ │          █▄ █▄▄            █▄▄█▄▄           │ │ ● Pools         2 of 2 online  (tank, fast)                        │ 
+ │          ████████▀█▄ █▀██▄ ██████           │ │ ● Update        0.2.1 available  on stable                         │ 
+ │          ████▀█▀████ ▀███┌──────────────────────────────────────────────────────────────┐10.0.10.1  dns 10.0.10.53 │ 
+ │           ███████████████│                                                              │                          │ 
+ │            ▀█████████████│  Reboot or shut down node-1?                                 │───────────────────       │ 
+ │              ██████▀▀▀███│                                                              │                          │ 
+ │              ████████████│  Nothing else runs on this node yet: apps and VMs come with  │                          │ 
+ │               ▀▀▀▀▀▀▀▀▀▀▀│  Tide.                                                       │                          │ 
+ │                          │                                                              │                          │ 
+ │                          │  The API and the agent stop and start again after a reboot.  │)                         │ 
+ │                  crustate│                                                              │                          │ 
+ │                          │      Reboot    [ Shut down ]   [ Cancel ]                    │                          │ 
+ │    Your own cloud, on you└──────────────────────────────────────────────────────────────┘                          │ 
+ │                                             │ │  7  Shut down                                                      │ 
+ │      Crustates 0.2.0 · node-1 · amd64       │ │                                                                    │ 
+ │                                             │ │ Actions 2, 3, 4, 6 and 7 ask for the recovery PIN shown at the     │ 
+ │                                             │ │ first boot.                                                        │ 
+ │                                             │ │                                                                    │ 
+ │                                             │ │                                                                    │ 
+ │                                             │ │                                                                    │ 
+ │                                             │ │                                                                    │ 
+ │                                             │ │                                                                    │ 
+ │                                             │ │                                                                    │ 
+ │                                             │ │                                                                    │ 
+ └─────────────────────────────────────────────┘ └────────────────────────────────────────────────────────────────────┘ 
+                                                                                                                        
+  left/right  choose   enter  confirm with PIN   esc  cancel
