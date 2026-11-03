@@ -123,12 +123,15 @@ jobs:
         if: steps.changes.outputs.build == 'true'
         run: cargo xtask molt build
 
+      # The serial log, and screenshots of the console on tty1.
       - name: Upload the serial log
         if: always() && steps.changes.outputs.build == 'true' && matrix.boot-test
         uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: serial-log-${{ matrix.arch }}
-          path: target/molt/dev-test/serial.log
+          path: |
+            target/molt/dev-test/serial.log
+            target/molt/dev-test/*.png
           if-no-files-found: ignore
 
       - name: Export the image

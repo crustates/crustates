@@ -264,6 +264,7 @@ fn self_test(upgrade: bool) -> anyhow::Result<()> {
         ])?;
         let mut serial = Serial { log: &log, from: 0 };
         let token = serial.wait_for_pass(version, false)?;
+        screenshots(&format!("{pod}-vm"), &out)?;
         let api = Api::new(token);
         api.check()?;
         if upgrade {
@@ -275,6 +276,36 @@ fn self_test(upgrade: bool) -> anyhow::Result<()> {
     let _ = podman(&["pod", "rm", "-f", &pod]);
     println!("serial log: {}", log.display());
     result
+}
+
+/// Screenshots of tty1 as PNGs next to the serial log: the first-boot
+/// screen, then, after enter, the home screen of the console.
+fn screenshots(vm: &str, out: &Path) -> anyhow::Result<()> {
+    let shot = |name: &str| -> anyhow::Result<()> {
+        let ppm = out.join(format!("{name}.ppm"));
+        let _ = std::fs::remove_file(&ppm);
+        monitor(vm, &format!("screendump /vm/{name}.ppm"))?;
+        let image = std::fs::read(&ppm).with_context(|| format!("reading {}", ppm.display()))?;
+        let png = out.join(format!("{name}.png"));
+        std::fs::write(&png, crate::console::ppm_to_png(&image)?)
+            .with_context(|| format!("writing {}", png.display()))?;
+        let _ = std::fs::remove_file(&ppm);
+        println!("screenshot: {}", png.display());
+        Ok(())
+    };
+    shot("tty1-first-boot")?;
+    monitor(vm, "sendkey ret")?;
+    // The console reads the machine again at once, then draws the home screen.
+    std::thread::sleep(Duration::from_secs(5));
+    shot("tty1-home")
+}
+
+/// Sends a command to the QEMU monitor of the VM container `vm`.
+fn monitor(vm: &str, command: &str) -> anyhow::Result<()> {
+    // The tools image has no netcat; bash talks TCP. The pause lets QEMU
+    // finish the command before the connection closes.
+    let script = "exec 3<>/dev/tcp/127.0.0.1/4444 && printf '%s\\n' \"$1\" >&3 && sleep 2";
+    podman(&["exec", vm, "bash", "-c", script, "monitor", command])
 }
 
 /// A → B (healthy) → B-bad (fails its health check), which greenboot must

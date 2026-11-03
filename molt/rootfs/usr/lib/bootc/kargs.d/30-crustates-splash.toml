@@ -1,0 +1,2 @@
+# The boot splash instead of kernel messages; the system log keeps them.
+kargs = ["rhgb", "quiet"]
