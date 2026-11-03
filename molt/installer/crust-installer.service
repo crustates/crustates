@@ -1,0 +1,20 @@
+# The installer on the install media's tty1. With an answers file (a stick
+# labelled CRUSTANS, or QEMU's fw_cfg) it installs without questions.
+[Unit]
+Description=Crustates installer
+After=systemd-user-sessions.service plymouth-quit-wait.service
+Conflicts=getty@tty1.service
+
+[Service]
+ExecStart=/usr/bin/crust-installer
+Environment=TERM=linux
+StandardInput=tty
+StandardOutput=tty
+TTYPath=/dev/tty1
+TTYReset=yes
+TTYVHangup=yes
+Restart=on-failure
+RestartSec=2
+
+[Install]
+WantedBy=multi-user.target

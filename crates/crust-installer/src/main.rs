@@ -1,7 +1,8 @@
 //! `crust-installer`: installs Crustates from the install media. On tty1 it
 //! walks through the steps of the design kit; with an answers file
-//! (`--answers FILE`, or `answers.toml` on a stick labelled `CRUSTANS`) it
-//! installs without questions and writes its progress to the console;
+//! (`--answers FILE`, `answers.toml` on a stick labelled `CRUSTANS`, or
+//! QEMU's `-fw_cfg name=opt/crustates/answers`) it installs without
+//! questions and writes its progress to the console;
 //! `--rescue` (or `crust.rescue` on the kernel command line) repairs an
 //! install; `--demo` shows the screens anywhere and installs nothing.
 
@@ -36,6 +37,8 @@ const PAYLOAD: &str = "/usr/lib/crustates/installer-payload";
 const SECRETS: &str = "/run/crust-installer/secrets";
 /// The label of a stick with `answers.toml`.
 const ANSWERS_LABEL: &str = "/dev/disk/by-label/CRUSTANS";
+/// Answers a virtual machine gets from QEMU (`-fw_cfg`).
+const ANSWERS_FW_CFG: &str = "/sys/firmware/qemu_fw_cfg/by_name/opt/crustates/answers/raw";
 
 enum Input {
     Key(Key),
@@ -105,8 +108,14 @@ fn set_up_vt() -> Glyphs {
     }
 }
 
-/// `answers.toml` from a stick labelled `CRUSTANS`, copied out.
+/// `answers.toml` from a stick labelled `CRUSTANS` or from QEMU, copied out.
 async fn answers_stick() -> Option<PathBuf> {
+    let _ = system::run("modprobe", &["qemu_fw_cfg"]).await;
+    if Path::new(ANSWERS_FW_CFG).exists() {
+        let copy = PathBuf::from("/run/crust-installer/answers.toml");
+        std::fs::create_dir_all("/run/crust-installer").ok()?;
+        return std::fs::copy(ANSWERS_FW_CFG, &copy).is_ok().then_some(copy);
+    }
     if !Path::new(ANSWERS_LABEL).exists() {
         return None;
     }

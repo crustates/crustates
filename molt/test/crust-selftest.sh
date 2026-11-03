@@ -80,8 +80,18 @@ retry 60 curl -fsS http://127.0.0.1:8080/healthz || fail "/healthz did not answe
 # only).
 saved=/var/lib/crust-selftest
 first=/run/crustates/firstboot.json
+# Installed from the ISO: the installer made the secrets and printed them;
+# the test hands them back through QEMU as "TOKEN PIN".
+fw_cfg=/sys/firmware/qemu_fw_cfg/by_name/opt/crustates/secrets/raw
+modprobe qemu_fw_cfg 2>/dev/null || true
+if [ -s "$fw_cfg" ] && [ ! -s "$saved/token" ]; then
+    install -d -m 0700 "$saved"
+    read -r fw_token fw_pin <"$fw_cfg"
+    echo "$fw_token" >"$saved/token"
+    echo "$fw_pin" >"$saved/pin"
+fi
 retry 60 test -s "$first" -o -s "$saved/token" || fail "no first-boot secrets within 60 s"
-if [ -s "$first" ]; then
+if [ -s "$first" ] && [ ! -s "$saved/token" ]; then
     [ "$(stat -c '%U %a' "$first")" = "root 600" ] || fail "$first is $(stat -c '%U %a' "$first"), want root 600"
     install -d -m 0700 "$saved"
     jq -r .token "$first" >"$saved/token"
