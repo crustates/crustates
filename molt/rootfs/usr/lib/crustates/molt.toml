@@ -1,9 +1,12 @@
 # Molt update settings (ADR 0016). Override them in /etc/crustates/molt.toml,
 # for example with `crust molt policy set`.
 
-# The image repository and the channel (tag) this machine follows.
+# The image repository.
 repository = "ghcr.io/crustates/molt"
-channel = "beta"
+# The channel (tag) this machine follows: stable, beta or development
+# (ADR 0017). Not set here: the first check picks stable if it holds an image
+# at least as new as this one, else beta, and writes it to /etc. Change it
+# with `crust molt channel set`.
 # auto: stage new images when they appear and reboot into them in the window.
 # manual: only report them; `crust molt upgrade` stages one.
 policy = "auto"
