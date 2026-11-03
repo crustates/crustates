@@ -20,3 +20,5 @@ Each record follows the MADR template in
 | 0012 | [Spawn: pull-based GitOps plus push-to-deploy builds](0012-spawn-gitops-and-push-to-deploy.md)                        | accepted |
 | 0013 | [Rust workspace layout](0013-rust-workspace-layout.md)                                                                | accepted |
 | 0014 | [Image hosting on GitHub Container Registry](0014-image-hosting-on-ghcr.md)                                           | accepted |
+| 0015 | [An admin token for the API until accounts arrive](0015-admin-token-until-accounts.md)                                | accepted |
+| 0016 | [Molt updates under Crustates' control, with automatic rollback](0016-controlled-molt-updates.md)                     | accepted |

@@ -96,25 +96,41 @@ virt-install --name molt --memory 4096 --vcpus 2 --boot uefi \
   --disk molt-VERSION-amd64.qcow2 --import --os-variant fedora-unknown
 ```
 
-## 4. Find the API address
+## 4. Write down the admin token
 
-Molt has no SSH: you manage it through its API.
+Molt has no SSH: you manage it through its API, and the API needs the
+machine's **admin token**. Molt makes it on the first boot and shows it on
+the machine's screen, above the login prompt:
 
-- The machine's own screen shows the address above the login prompt:
-  `Crustates API: http://192.168.1.23:8080/docs`.
-- Or look in your router's list of connected devices.
-
-Open that address in a browser for the API reference, or use the CLI:
-
-```sh
-crust --api http://192.168.1.23:8080 status
-crust --api http://192.168.1.23:8080 node list
+```text
+Crustates admin token: crt_XXXXX-XXXXX-XXXXX-XXXXX
+Write it down now: it is shown only until the next reboot.
+On your computer: crust --api http://192.168.1.23:8080 login
 ```
 
-The node shows as `Ready` within a few seconds.
+Write it down before you reboot. Without it you cannot use the API, and
+until the local recovery console arrives (later in M0) the only way to get a
+new one is to reinstall.
 
-> **The API has no login yet** (accounts come in M4). Only connect Molt to a
-> network you trust.
+## 5. Log in
+
+The screen also shows the API address. Or look in your router's list of
+connected devices. Open `http://ADDRESS:8080/docs` in a browser for the API
+reference, or use the CLI:
+
+```sh
+crust --api http://192.168.1.23:8080 login    # paste the admin token
+crust status
+crust node list
+```
+
+`crust login` checks the token and saves it, readable only by you, in
+`~/.config/crust/config.toml`; later commands use that API and token. The node
+shows as `Ready` within a few seconds.
+
+> **The API speaks plain HTTP for now** (TLS comes with ingress in M2), so the
+> token crosses the network unencrypted. Only connect Molt to a network you
+> trust.
 
 ## Secure Boot
 
@@ -123,6 +139,25 @@ Crustates module-signing key once: see [crust molt enroll-key](molt/enroll-key.m
 
 ## Updates
 
-Molt follows the `beta` channel of `ghcr.io/crustates/molt`, checks for new
-images by itself and reboots into them. `crust molt` commands to control
-upgrades and roll back come later.
+Molt follows the `beta` channel of `ghcr.io/crustates/molt`. The machine
+checks it once a day, and installs only images that the Crustates release
+workflow signed.
+
+```sh
+crust molt status                  # what runs, what is staged, what is new
+crust molt policy set auto --window 03:00-05:00
+crust molt policy set manual       # only report new images
+crust molt upgrade [--now]         # stage the newest image (and reboot)
+crust molt rollback [--now]        # go back to the previous image
+```
+
+- **auto** (the default) stages a new image when it appears and reboots into
+  it inside the window, in the machine's local time.
+- **manual** only reports new images; `crust molt upgrade` stages one, and
+  `--now` reboots into it right away.
+
+After an update the machine checks itself: the API answers, the agent runs,
+ZFS pools imported, the network is up. If the new image fails that check, or
+does not boot at all, the machine goes back to the previous image by itself
+and never installs that image again. `crust molt status` shows it under
+"Marked bad".
