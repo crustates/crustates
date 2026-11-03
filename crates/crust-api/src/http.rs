@@ -23,6 +23,7 @@ use utoipa_scalar::{Scalar, Servable};
 
 use crate::auth::{Auth, Principal, require_token};
 use crate::commands::{CommandError, Commands};
+use crate::local::{LOCAL_CONSOLE, RecoveryPin, require_root};
 
 /// How long an upgrade may take: the agent downloads the new image first.
 const UPGRADE_TIMEOUT: Duration = Duration::from_mins(30);
@@ -40,6 +41,8 @@ pub struct AppState {
     pub auth: Arc<Auth>,
     /// Sends commands to node agents.
     pub commands: Commands,
+    /// Checks the recovery PIN for the local console.
+    pub pin: Arc<RecoveryPin>,
 }
 
 #[derive(OpenApi)]
@@ -53,6 +56,7 @@ pub struct AppState {
         (name = "nodes", description = "Machines that run the node agent"),
         (name = "molt", description = "The Molt OS image of each node and its updates"),
         (name = "audit", description = "Who changed what"),
+        (name = "local", description = "The console on the machine's own screen, through the local socket"),
     ),
     modifiers(&AdminToken),
     security(("admin_token" = [])),
@@ -88,12 +92,22 @@ fn routes() -> OpenApiRouter<AppState> {
         .routes(routes!(molt_channel))
         .routes(routes!(molt_enroll_key))
         .routes(routes!(audit_log))
+        .routes(routes!(check_pin))
 }
 
 /// The OpenAPI description of the API.
 #[must_use]
 pub fn openapi() -> utoipa::openapi::OpenApi {
     routes().split_for_parts().1
+}
+
+/// The router of the local socket: the same API, for root on the machine as
+/// the local console, without a token (ADR 0018).
+pub fn local_router(state: AppState) -> Router {
+    let (router, _) = routes().split_for_parts();
+    router
+        .layer(axum::middleware::from_fn(require_root))
+        .with_state(state)
 }
 
 /// The HTTP router: the API plus the Scalar reference at `/docs`. Every
@@ -344,6 +358,17 @@ struct AuditParams {
     /// How many entries, newest first (1 to 1000).
     #[serde(default = "default_audit_limit")]
     limit: u32,
+    /// Only entries of this action, for example `molt.upgrade`.
+    action: Option<String>,
+}
+
+/// A recovery PIN to check before a risky action.
+#[derive(Debug, Serialize, Deserialize, ToSchema)]
+struct PinCheck {
+    /// The nine-digit PIN; spaces and dashes are ignored.
+    pin: String,
+    /// The action it is for, for the audit log, for example `power.reboot`.
+    action: String,
 }
 
 fn default_audit_limit() -> u32 {
@@ -617,6 +642,46 @@ async fn audit_log(
     if !(1..=1000).contains(&params.limit) {
         return Err(ApiError::bad_request("limit must be 1 to 1000".into()));
     }
-    let items = state.store.audit_log(params.limit).await?;
+    let items = state
+        .store
+        .audit_log(params.limit, params.action.as_deref())
+        .await?;
     Ok(Json(AuditLog { items }))
+}
+
+/// Checks the recovery PIN before a risky action of the local console. Only
+/// the local console may call it. Five wrong PINs lock it for 15 minutes;
+/// every attempt goes into the audit log.
+#[utoipa::path(
+    post,
+    path = "/v1/local/pin",
+    tag = "local",
+    request_body = PinCheck,
+    responses(
+        (status = 204, description = "The PIN is right"),
+        (status = 403, body = ErrorBody, description = "The PIN is wrong, or the caller is not the local console"),
+        (status = 429, body = ErrorBody, description = "Too many wrong PINs"),
+        (status = 503, body = ErrorBody, description = "No PIN is set up"),
+    ),
+)]
+async fn check_pin(
+    State(state): State<AppState>,
+    Extension(principal): Extension<Principal>,
+    Json(check): Json<PinCheck>,
+) -> Response {
+    if principal.0 != LOCAL_CONSOLE {
+        return ApiError {
+            status: StatusCode::FORBIDDEN,
+            message: "only the local console on the machine checks the recovery PIN".into(),
+        }
+        .into_response();
+    }
+    match state
+        .pin
+        .check(&state.store, &check.pin, &check.action)
+        .await
+    {
+        Ok(()) => StatusCode::NO_CONTENT.into_response(),
+        Err(e) => e.into_response(),
+    }
 }

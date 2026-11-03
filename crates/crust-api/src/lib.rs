@@ -6,6 +6,7 @@ mod commands;
 mod config;
 mod grpc;
 mod http;
+pub mod local;
 
 use std::net::SocketAddr;
 use std::sync::Arc;
@@ -14,7 +15,7 @@ use std::time::Duration;
 use crust_proto::agent::v1::node_service_server::NodeServiceServer;
 use crust_reconcile::node::NodeHeartbeat;
 use crust_store::SqliteStore;
-use tokio::net::TcpListener;
+use tokio::net::{TcpListener, UnixListener};
 use tokio_stream::wrappers::TcpListenerStream;
 use tokio_util::sync::CancellationToken;
 
@@ -22,7 +23,8 @@ pub use auth::Auth;
 pub use commands::{CommandError, Commands};
 pub use config::Config;
 pub use grpc::NodeReports;
-pub use http::{AppState, openapi, router};
+pub use http::{AppState, local_router, openapi, router};
+pub use local::RecoveryPin;
 
 /// What can stop the control plane.
 #[derive(Debug, thiserror::Error)]
@@ -35,10 +37,23 @@ pub enum Error {
     Grpc(#[from] tonic::transport::Error),
 }
 
-/// Serves the REST API on `http` and the agent service on `agents`, and runs
-/// the reconcile loops, until `shutdown` fires. Nodes turn `NotReady` after
-/// `heartbeat_timeout` without a report. `/v1/` requests need the admin
-/// token that `auth` checks.
+/// Where the control plane listens.
+#[derive(Debug)]
+pub struct Listeners {
+    /// The REST API, for clients with the admin token.
+    pub http: TcpListener,
+    /// The agent service (gRPC).
+    pub agents: TcpListener,
+    /// The local socket for root on the machine (ADR 0018), if any.
+    pub local: Option<UnixListener>,
+}
+
+/// Serves the REST API on `listeners.http`, and to root on
+/// `listeners.local` (ADR 0018), and the agent service on
+/// `listeners.agents`, and runs the reconcile loops, until `shutdown` fires. Nodes turn `NotReady` after `heartbeat_timeout`
+/// without a report. `/v1/` requests on `http` need the admin token that
+/// `auth` checks; the local console's risky actions need the PIN `pin`
+/// checks.
 ///
 /// # Errors
 ///
@@ -47,17 +62,36 @@ pub async fn serve(
     store: SqliteStore,
     heartbeat_timeout: Duration,
     auth: Auth,
-    http: TcpListener,
-    agents: TcpListener,
+    pin: RecoveryPin,
+    listeners: Listeners,
     shutdown: CancellationToken,
 ) -> Result<(), Error> {
+    let Listeners {
+        http,
+        agents,
+        local,
+    } = listeners;
     let commands = Commands::default();
-    let api = router(AppState {
+    let state = AppState {
         store: store.clone(),
         shutdown: shutdown.clone(),
         auth: Arc::new(auth),
         commands: commands.clone(),
-    });
+        pin: Arc::new(pin),
+    };
+    let local_api = {
+        let (state, shutdown) = (state.clone(), shutdown.clone());
+        async move {
+            let Some(local) = local else {
+                return Ok(());
+            };
+            let api = local_router(state).into_make_service_with_connect_info::<local::Peer>();
+            axum::serve(local, api)
+                .with_graceful_shutdown(shutdown.cancelled_owned())
+                .await
+        }
+    };
+    let api = router(state);
     // Connection info gives the rate limit for wrong tokens its client address.
     let api = axum::serve(
         http,
@@ -81,6 +115,7 @@ pub async fn serve(
     );
     tokio::try_join!(
         async { api.await.map_err(Error::from) },
+        async { local_api.await.map_err(Error::from) },
         async { agent_service.await.map_err(Error::from) },
         async {
             reconcile.await;

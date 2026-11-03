@@ -95,7 +95,7 @@ pub fn hash(token: &str) -> Result<String, argon2::password_hash::Error> {
     Ok(hash.to_string())
 }
 
-fn verify(token: &str, phc: &str) -> bool {
+pub(crate) fn verify(token: &str, phc: &str) -> bool {
     PasswordHash::new(phc.trim()).is_ok_and(|hash| {
         Argon2::default()
             .verify_password(token.as_bytes(), &hash)

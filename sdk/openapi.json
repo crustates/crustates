@@ -48,6 +48,18 @@
               "format": "int32",
               "minimum": 0
             }
+          },
+          {
+            "name": "action",
+            "in": "path",
+            "description": "Only entries of this action, for example `molt.upgrade`.",
+            "required": true,
+            "schema": {
+              "type": [
+                "string",
+                "null"
+              ]
+            }
           }
         ],
         "responses": {
@@ -70,6 +82,60 @@
             }
           },
           "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/local/pin": {
+      "post": {
+        "tags": [
+          "local"
+        ],
+        "summary": "Checks the recovery PIN before a risky action of the local console. Only\nthe local console may call it. Five wrong PINs lock it for 15 minutes;\nevery attempt goes into the audit log.",
+        "operationId": "check_pin",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/PinCheck"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "204": {
+            "description": "The PIN is right"
+          },
+          "403": {
+            "description": "The PIN is wrong, or the caller is not the local console",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Too many wrong PINs",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "No PIN is set up",
             "content": {
               "application/json": {
                 "schema": {
@@ -1002,6 +1068,24 @@
           }
         }
       },
+      "PinCheck": {
+        "type": "object",
+        "description": "A recovery PIN to check before a risky action.",
+        "required": [
+          "pin",
+          "action"
+        ],
+        "properties": {
+          "action": {
+            "type": "string",
+            "description": "The action it is for, for the audit log, for example `power.reboot`."
+          },
+          "pin": {
+            "type": "string",
+            "description": "The nine-digit PIN; spaces and dashes are ignored."
+          }
+        }
+      },
       "PolicyChange": {
         "type": "object",
         "description": "An update policy to set.",
@@ -1066,6 +1150,10 @@
     {
       "name": "audit",
       "description": "Who changed what"
+    },
+    {
+      "name": "local",
+      "description": "The console on the machine's own screen, through the local socket"
     }
   ]
 }

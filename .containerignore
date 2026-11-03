@@ -3,3 +3,4 @@ target/
 .git/
 **/*.db*
 **/crust-admin-token*
+**/crust-recovery-pin*

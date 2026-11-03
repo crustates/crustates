@@ -116,6 +116,11 @@ pub trait Store: Clone + Send + Sync + 'static {
     /// Appends `entry` to the audit log.
     fn audit(&self, entry: AuditEntry) -> impl Future<Output = Result<(), Error>> + Send;
 
-    /// The newest `limit` audit entries, newest first.
-    fn audit_log(&self, limit: u32) -> impl Future<Output = Result<Vec<AuditEntry>, Error>> + Send;
+    /// The newest `limit` audit entries, newest first; only those of
+    /// `action` if it is given.
+    fn audit_log(
+        &self,
+        limit: u32,
+        action: Option<&str>,
+    ) -> impl Future<Output = Result<Vec<AuditEntry>, Error>> + Send;
 }
