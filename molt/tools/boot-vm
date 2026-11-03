@@ -10,8 +10,9 @@
 # container: `cargo xtask molt test` takes screenshots of tty1 through it.
 #
 # Installing from the ISO (cargo xtask molt test-install): MOLT_CDROM is the
-# ISO, MOLT_DISK_RW=1 keeps what is written to DISK, and MOLT_FW_CFG holds
-# QEMU -fw_cfg values separated by spaces (answers, test secrets).
+# ISO, MOLT_DISK_RW=1 keeps what is written to DISK, MOLT_EXTRA_DISKS adds
+# more disks (pools), and MOLT_FW_CFG holds QEMU -fw_cfg values (answers,
+# test secrets); lists are separated by spaces. A DISK ending in .raw is raw.
 #
 # MOLT_ACCEL=tcg emulates the CPU instead of using KVM: about 10x slower, for
 # hosts where KVM is missing or broken (nested KVM in a macOS podman machine
@@ -47,12 +48,14 @@ esac
 cp "$vars" /tmp/vars.fd
 snapshot=on
 [ -n "${MOLT_DISK_RW:-}" ] && snapshot=off
+format=qcow2
+[[ "$disk" == *.raw ]] && format=raw
 
 args=(
     -machine "$machine,accel=$accel" -cpu "$cpu" -smp 2 -m 2048
     -drive "if=pflash,format=raw,readonly=on,file=$code"
     -drive "if=pflash,format=raw,file=/tmp/vars.fd"
-    -drive "if=virtio,format=qcow2,file=$disk,snapshot=$snapshot"
+    -drive "if=virtio,format=$format,file=$disk,snapshot=$snapshot"
     -netdev "user,id=net0,hostfwd=tcp::8080-:8080"
     -device "virtio-net-pci,netdev=net0"
     "${display[@]}"
@@ -62,6 +65,9 @@ if [ -n "${MOLT_CDROM:-}" ]; then
         -drive "if=none,id=cd,media=cdrom,readonly=on,file=$MOLT_CDROM"
         -device "scsi-cd,drive=cd,bootindex=1")
 fi
+for extra in ${MOLT_EXTRA_DISKS:-}; do
+    args+=(-drive "if=virtio,format=raw,file=$extra,snapshot=$snapshot")
+done
 for value in ${MOLT_FW_CFG:-}; do
     args+=(-fw_cfg "$value")
 done
