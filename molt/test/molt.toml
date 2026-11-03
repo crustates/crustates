@@ -1,0 +1,8 @@
+# Test images only: updates come from the registry that `cargo xtask molt
+# test` runs next to the VM (the host is 10.0.2.2 for the guest). Its images
+# are unsigned, and the test decides when to upgrade.
+repository = "10.0.2.2:5000/crustates/molt"
+channel = "beta"
+policy = "manual"
+window = "03:00-05:00"
+verify_signatures = false

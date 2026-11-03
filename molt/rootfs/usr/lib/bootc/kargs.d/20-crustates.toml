@@ -1,0 +1,3 @@
+# Reboot 10 s after a kernel panic instead of hanging, so a new image whose
+# kernel panics falls back to the previous one (crust-boot-trial).
+kargs = ["panic=10"]

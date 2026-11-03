@@ -2,8 +2,10 @@
 # from the repository root, which is the build context.
 #
 # Targets:
-#   molt       the production image
-#   molt-test  molt plus crust-selftest.service, for boot tests only
+#   molt           the production image
+#   molt-test      molt plus crust-selftest.service, for boot tests only; it
+#                  updates from the test registry without signature checks
+#   molt-test-bad  molt-test whose health check fails, to test rollbacks
 
 # Fedora 45 bootc, pinned by digest; Renovate bumps it. A new digest that
 # brings a new kernel fails the kernel.lock check below until the lock is
@@ -30,6 +32,20 @@ RUN --mount=type=cache,target=/opt/cargo/registry \
     && install -D -m 0755 -t /out/usr/bin \
         target/release/crust-api target/release/crust-agent target/release/crust
 
+# cosign, for the agent's image signature checks (ADR 0016). Fedora does not
+# package it, so this is the release binary, pinned by version and checksum.
+FROM ${BASE} AS cosign
+ARG COSIGN_VERSION=3.1.4
+RUN case "$(uname -m)" in \
+        x86_64) arch=amd64 sum=424e2c97d0b45fd7a6b608a87f090f35633f4c23ece5f092d48bba11aaf4bbfa ;; \
+        aarch64) arch=arm64 sum=ade83b7aac62e131cacfe96d958948b2150cc9efec46a570a2649b8e27dedad2 ;; \
+        *) echo "no cosign for $(uname -m)" >&2; exit 1 ;; \
+    esac \
+    && curl -sSfL -o /tmp/cosign \
+        "https://github.com/sigstore/cosign/releases/download/v${COSIGN_VERSION}/cosign-linux-${arch}" \
+    && echo "${sum}  /tmp/cosign" | sha256sum --check --quiet \
+    && install -D -m 0755 /tmp/cosign /out/usr/libexec/crustates/cosign
+
 # The base image plus the kernel-devel that matches kernel.lock, for building
 # out-of-tree modules. See molt/kmods/README.md.
 FROM ${BASE} AS kmod-base
@@ -51,7 +67,6 @@ RUN --mount=type=secret,id=module-signing-key \
     /kmods/sign.sh
 
 FROM ${BASE} AS molt
-ARG VERSION
 RUN --mount=type=bind,source=molt/kernel.lock,target=/run/kernel.lock \
     kernel=$(rpm -q --qf '%{VERSION}-%{RELEASE}\n' kernel) \
     && want=$(cat /run/kernel.lock) \
@@ -59,16 +74,26 @@ RUN --mount=type=bind,source=molt/kernel.lock,target=/run/kernel.lock \
         echo "kernel $kernel differs from molt/kernel.lock ($want); bump the lock in its own PR" >&2; \
         exit 1; \
     fi
-# No SSH: everything goes through the API.
-RUN dnf -y remove openssh-server && dnf clean all \
+# No SSH: everything goes through the API. greenboot runs the health checks
+# that roll back a new image (ADR 0016).
+RUN dnf -y remove openssh-server \
+    && dnf -y install --setopt=install_weak_deps=False greenboot \
+    && dnf clean all \
     && rm -rf /run/dnf /var/cache/libdnf5 /var/log/dnf5.log* /var/lib/dnf
 COPY --from=builder /out/ /
+COPY --from=cosign /out/ /
 # ZFS modules (signed) and userland. Btrfs is in the kernel, btrfs-progs in
 # the base image.
 COPY --from=kmod-zfs /out/ /
 RUN depmod -a "$(ls /usr/lib/modules)"
 COPY molt/rootfs/ /
-RUN systemctl enable crust-api.service crust-agent.service nftables.service
+# Crustates decides when Molt updates (the agent), not bootc's own timer.
+RUN systemctl enable crust-api.service crust-agent.service crust-firstboot.service nftables.service \
+        greenboot-healthcheck.service greenboot-set-rollback-trigger.service crust-boot-trial.service \
+    && systemctl mask bootc-fetch-apply-updates.timer
+# Late, so a new version reuses every layer above.
+ARG VERSION
+LABEL org.opencontainers.image.version=${VERSION}
 # printf, not a heredoc: RUN heredocs need buildah 1.35+, and the CI runners
 # have podman 4.9 (buildah 1.33).
 RUN test -n "${VERSION}" \
@@ -80,5 +105,11 @@ FROM molt AS molt-test
 COPY molt/test/crust-selftest.sh /usr/libexec/crustates/crust-selftest
 COPY molt/test/crust-selftest.service /usr/lib/systemd/system/
 COPY molt/test/1*-serial-console*.toml /usr/lib/bootc/kargs.d/
+# Updates come from the local registry of `cargo xtask molt test`, unsigned.
+COPY molt/test/molt.toml /usr/lib/crustates/molt.toml
+COPY molt/test/50-crust-test-registry.conf /etc/containers/registries.conf.d/
 RUN systemctl enable crust-selftest.service
 RUN bootc container lint
+
+FROM molt-test AS molt-test-bad
+RUN touch /usr/lib/crustates/test-fail-health

@@ -1,0 +1,23 @@
+#!/bin/bash
+# Makes the admin token: stores its argon2id hash where the API can read but
+# not change it, and shows the token on the console until the next reboot.
+set -euo pipefail
+umask 077
+
+secrets=/var/lib/crustates/secrets
+install -d -m 0750 -o root -g crustates "$secrets"
+token=$(CRUST_ADMIN_TOKEN_FILE="$secrets/admin-token" /usr/bin/crust-api new-admin-token)
+chgrp crustates "$secrets/admin-token"
+chmod 0640 "$secrets/admin-token"
+
+# /run is a tmpfs: the token is gone from the screen after a reboot.
+install -d -m 0755 /run/issue.d
+cat >/run/issue.d/40-crustates-admin-token.issue <<ISSUE
+Crustates admin token: ${token}
+Write it down now: it is shown only until the next reboot.
+On your computer: crust --api http://\4:8080 login
+
+ISSUE
+# Redraw the login prompts that are already up.
+agetty --reload 2>/dev/null || true
+echo "admin token made; it is shown on the console until the next reboot"

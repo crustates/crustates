@@ -1,0 +1,16 @@
+#!/bin/bash
+# Arms greenboot's boot counter for a staged image: GRUB counts the next boot
+# down to 0 and boots the new image; if that boot does not reach a passing
+# health check (greenboot sets boot_success=1), the boot after it is the
+# previous image (08_greenboot.cfg). See crust-boot-trial.service.
+set -euo pipefail
+
+if ! bootc status --json | jq -e '.status.staged != null' >/dev/null; then
+    exit 0
+fi
+# /boot is read-only; this unit has its own mount namespace (PrivateMounts=).
+if findmnt -no OPTIONS /boot | tr ',' '\n' | grep -qx ro; then
+    mount -o remount,rw /boot
+fi
+grub2-editenv /boot/grub2/grubenv set boot_counter=1 boot_success=0
+echo "a staged Molt image gets one trial boot"

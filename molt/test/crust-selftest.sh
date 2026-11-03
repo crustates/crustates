@@ -1,6 +1,7 @@
 #!/bin/bash
-# Checks a booted Molt test image. Runs once at boot as root and prints one
-# result line: CRUST-SELFTEST: PASS, or CRUST-SELFTEST: FAIL <reason>.
+# Checks a booted Molt test image. Runs at every boot as root and prints the
+# admin token (CRUST-SELFTEST-TOKEN: crt_…) and one result line:
+# CRUST-SELFTEST: PASS <version>, or CRUST-SELFTEST: FAIL <reason>.
 set -uo pipefail
 
 # Prints the result line to the journal and to every kernel console. On
@@ -47,6 +48,10 @@ grep -q '^IMAGE_VERSION=.' /usr/lib/os-release || fail "os-release has no IMAGE_
 ! command -v sshd >/dev/null || fail "sshd is installed"
 nft list table inet crustates >/dev/null || fail "the crustates nftables table is not loaded"
 ! touch /usr/.crust-selftest 2>/dev/null || fail "/usr is writable"
+[ "$(systemctl is-enabled bootc-fetch-apply-updates.timer 2>&1)" = masked ] ||
+    fail "bootc-fetch-apply-updates.timer is not masked: the agent decides when to update"
+/usr/libexec/crustates/cosign version >/dev/null 2>&1 || fail "the pinned cosign does not run"
+grep -q boot_counter /boot/grub2/grub.cfg || fail "grub.cfg has no greenboot boot counter: no automatic rollback"
 
 # Storage: ZFS from the signed out-of-tree module, Btrfs from the kernel.
 modprobe zfs || fail "modprobe zfs failed"
@@ -68,6 +73,37 @@ rm -rf "$work"
 
 retry 60 curl -fsS http://127.0.0.1:8080/healthz || fail "/healthz did not answer within 60 s"
 [ -f /var/lib/crustates/crust.db ] || fail "no database in /var/lib/crustates"
+[ "$(systemctl show -P User crust-api.service)" = crustates ] || fail "crust-api does not run as crustates"
+
+# The admin token: on the first boot from the console message, which is gone
+# after a reboot, so this test keeps a copy (test images only).
+saved=/var/lib/crust-selftest/token
+issue=/run/issue.d/40-crustates-admin-token.issue
+retry 60 test -s "$issue" -o -s "$saved" || fail "no admin token on the console within 60 s"
+if [ -s "$issue" ]; then
+    install -d -m 0700 "$(dirname "$saved")"
+    grep -o 'crt_[0-9A-Z-]*' "$issue" >"$saved"
+fi
+token=$(cat "$saved")
+echo "<2>CRUST-SELFTEST-TOKEN: $token" >/dev/kmsg
+[ "$(stat -c '%U:%G %a' /var/lib/crustates/secrets)" = "root:crustates 750" ] ||
+    fail "/var/lib/crustates/secrets is $(stat -c '%U:%G %a' /var/lib/crustates/secrets), want root:crustates 750"
+[ "$(stat -c '%U:%G %a' /var/lib/crustates/secrets/admin-token)" = "root:crustates 640" ] ||
+    fail "the admin token hash is $(stat -c '%U:%G %a' /var/lib/crustates/secrets/admin-token), want root:crustates 640"
+code=$(curl -s -o /dev/null -w '%{http_code}' http://127.0.0.1:8080/v1/nodes)
+[ "$code" = 401 ] || fail "/v1/nodes without the token answered $code, want 401"
+export CRUST_TOKEN=$token
 retry 60 sh -c 'crust node list | grep -qw Ready' || fail "no Ready node within 60 s: $(crust node list 2>&1 | tr '\n' ' ')"
 
-result PASS
+# greenboot's verdict on this boot.
+health_done() {
+    case $(systemctl show -P ActiveState greenboot-healthcheck.service) in
+        active | failed) return 0 ;;
+        *) return 1 ;;
+    esac
+}
+retry 360 health_done
+systemctl is-active --quiet greenboot-healthcheck.service || fail "the greenboot health check failed: $(journalctl -b -u greenboot-healthcheck --no-pager | grep -E 'FAIL|error' | tail -3 | tr '\n' ' ')"
+
+# shellcheck source=/dev/null
+result "PASS $(. /usr/lib/os-release && echo "$IMAGE_VERSION")"
