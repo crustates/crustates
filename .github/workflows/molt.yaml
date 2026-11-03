@@ -293,8 +293,9 @@ jobs:
         run: |
           image=ghcr.io/crustates/molt
           printf '%s' "$TOKEN" | sudo podman login ghcr.io --username "$GITHUB_ACTOR" --password-stdin
-          printf '%s' "$TOKEN" | skopeo login ghcr.io --username "$GITHUB_ACTOR" --password-stdin
-          digest=$(skopeo inspect --raw "docker://$image:${GITHUB_REF_NAME#v}" |
+          # One login, as root: sudo keeps XDG_RUNTIME_DIR, so root's auth.json
+          # lands in the runner user's runtime dir, unreadable without sudo.
+          digest=$(sudo skopeo inspect --raw "docker://$image:${GITHUB_REF_NAME#v}" |
             jq -r --arg arch "$ARCH" '.manifests[] | select(.platform.architecture == $arch) | .digest')
           cosign verify "$image@$digest" \
             --certificate-identity "https://github.com/${GITHUB_REPOSITORY}/.github/workflows/molt.yaml@${GITHUB_REF}" \
