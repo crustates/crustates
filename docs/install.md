@@ -139,9 +139,9 @@ Crustates module-signing key once: see [crust molt enroll-key](molt/enroll-key.m
 
 ## Updates
 
-Molt follows the `beta` channel of `ghcr.io/crustates/molt`. The machine
-checks it once a day, and installs only images that the Crustates release
-workflow signed.
+Molt follows one channel of `ghcr.io/crustates/molt`. The machine checks it
+once a day, and installs only images that the Crustates release workflows
+signed.
 
 ```sh
 crust molt status                  # what runs, what is staged, what is new
@@ -149,6 +149,7 @@ crust molt policy set auto --window 03:00-05:00
 crust molt policy set manual       # only report new images
 crust molt upgrade [--now]         # stage the newest image (and reboot)
 crust molt rollback [--now]        # go back to the previous image
+crust molt channel set stable      # follow another channel
 ```
 
 - **auto** (the default) stages a new image when it appears and reboots into
@@ -161,3 +162,21 @@ ZFS pools imported, the network is up. If the new image fails that check, or
 does not boot at all, the machine goes back to the previous image by itself
 and never installs that image again. `crust molt status` shows it under
 "Marked bad".
+
+### Channels
+
+| Channel       | Gets                                                       |
+| ------------- | ---------------------------------------------------------- |
+| `stable`      | Releases that ran on `beta` for at least a week, unchanged |
+| `beta`        | Every release, pre-releases too                            |
+| `development` | Every merge; for testing Crustates itself                  |
+
+A new machine picks its channel at its first check: `stable` if it holds a
+version at least as new as the installed one, else `beta`. It keeps that
+choice; `crust molt status` shows it.
+
+`crust molt channel set <channel>` switches. A switch to a channel with an
+older version is refused, because an older version may not read what a newer
+one wrote; `--allow-downgrade` switches anyway. With the `auto` policy the
+machine stages the new channel's image right away; with `manual`, run
+`crust molt upgrade`.

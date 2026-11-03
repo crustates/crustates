@@ -60,7 +60,7 @@ Code names stay plain: a crate or module is `vm-driver`, not `tide-driver`.
 | `molt/`                  | Molt OS image: Containerfile, rootfs, selftest   |
 | `sdk/`                   | Client SDK and `openapi.json` (Apache-2.0)       |
 | `wit/`                   | Barnacle plugin interfaces (Apache-2.0), empty   |
-| `.github/workflows/`     | `ci` (the required check) and `docs` (Pages)     |
+| `.github/workflows/`     | `ci`, `molt`, `promote`, `docs`; see each header |
 
 Update this table when the layout changes. ADR 0013 records why it looks like
 this.
@@ -97,6 +97,7 @@ this.
   it goes into the `release` environment secrets, never into the repo.
 - The `molt` workflow builds both architectures, boot-tests amd64 (the hosted
   arm64 runners have no KVM) and publishes to `ghcr.io/crustates/molt`.
+  `promote`, run by hand, moves a release to the `stable` channel (ADR 0017).
 - `molt/kernel.lock` pins the image kernel. A base image with another kernel
   fails the build; bump the lock in its own PR after checking OpenZFS supports
   that kernel.
