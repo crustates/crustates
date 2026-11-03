@@ -21,9 +21,9 @@ expression: small
  │                                            │ │      32.0 GB                │ 
  │ Press esc to change anything. Nothing has  │ │    not selected, will not   │ 
  │ been written yet.                          │ │ be touched                  │ 
- │                                            │ │                             │ 
  │                                            │ │ Type ERASE to confirm       │ 
- │                                            │ │                             │ 
  │                                            │ │    ERA_______               │ 
+ │                                            │ │ The install starts when you │ 
+ │                                            │ │ press enter.                │ 
  └────────────────────────────────────────────┘ └─────────────────────────────┘ 
   type  ERASE to confirm   enter  install   esc  back

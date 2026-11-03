@@ -1,10 +1,12 @@
 //! The files the installer writes into the new system: the management
 //! network, the Molt channel and policy, the hostname.
 
+use std::fmt::Write as _;
+
 use crate::answers::Answers;
 
-/// A NetworkManager keyfile for a fixed address or a VLAN; `None` for
-/// plain DHCP, which NetworkManager does by itself on every wired port.
+/// A `NetworkManager` keyfile for a fixed address or a VLAN; `None` for
+/// plain DHCP, which `NetworkManager` does by itself on every wired port.
 #[must_use]
 pub fn keyfile(answers: &Answers, interface: &str) -> Option<String> {
     let net = &answers.network;
@@ -15,21 +17,29 @@ pub fn keyfile(answers: &Answers, interface: &str) -> Option<String> {
         "# Written by crust-installer: the management network.\n[connection]\nid=crust-mgmt\n",
     );
     match net.vlan {
-        Some(id) => out.push_str(&format!(
-            "type=vlan\ninterface-name={interface}.{id}\nautoconnect=true\n\n[vlan]\nparent={interface}\nid={id}\n"
-        )),
-        None => out.push_str(&format!("type=ethernet\ninterface-name={interface}\nautoconnect=true\n")),
+        Some(id) => {
+            let _ = writeln!(
+                out,
+                "type=vlan\ninterface-name={interface}.{id}\nautoconnect=true\n\n[vlan]\nparent={interface}\nid={id}"
+            );
+        }
+        None => {
+            let _ = writeln!(
+                out,
+                "type=ethernet\ninterface-name={interface}\nautoconnect=true"
+            );
+        }
     }
     out.push_str("\n[ipv4]\n");
     if net.is_static() {
         out.push_str("method=manual\n");
         if net.gateway.is_empty() {
-            out.push_str(&format!("address1={}\n", net.address));
+            let _ = writeln!(out, "address1={}", net.address);
         } else {
-            out.push_str(&format!("address1={},{}\n", net.address, net.gateway));
+            let _ = writeln!(out, "address1={},{}", net.address, net.gateway);
         }
         if !net.dns.is_empty() {
-            out.push_str(&format!("dns={};\n", net.dns.join(";")));
+            let _ = writeln!(out, "dns={};", net.dns.join(";"));
         }
     } else {
         out.push_str("method=auto\n");

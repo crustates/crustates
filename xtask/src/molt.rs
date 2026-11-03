@@ -829,6 +829,7 @@ fn wait_for_install(log: &Path) -> anyhow::Result<(String, String)> {
 /// Installs the test image from its ISO onto an empty VM, with a mirrored
 /// pool on two more disks, then boots the installed disk: the selftest must
 /// pass, the pool must be there, and the API must take the installer's token.
+#[allow(clippy::too_many_lines, reason = "two VM runs, one after the other")]
 fn test_install() -> anyhow::Result<()> {
     let version = env!("CARGO_PKG_VERSION");
     build(true)?;

@@ -91,6 +91,7 @@ fn finding(
 
 /// Judges the facts.
 #[must_use]
+#[allow(clippy::too_many_lines, reason = "one check after the other")]
 pub fn check(f: &Facts) -> Vec<Finding> {
     let mut out = Vec::new();
     let virt = if f.arch == "amd64" {
@@ -301,9 +302,7 @@ impl Facts {
             } else {
                 format!("{cores} cores ({model})")
             },
-            iommu_groups: std::fs::read_dir("/sys/kernel/iommu_groups")
-                .map(Iterator::count)
-                .unwrap_or(0),
+            iommu_groups: std::fs::read_dir("/sys/kernel/iommu_groups").map_or(0, Iterator::count),
             memory,
             tpm: std::fs::read_to_string("/sys/class/tpm/tpm0/tpm_version_major")
                 .ok()

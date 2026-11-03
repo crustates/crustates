@@ -103,7 +103,7 @@ pub enum Effect {
     /// Test the network.
     TestNetwork,
     /// Install.
-    Install(Answers),
+    Install(Box<Answers>),
     /// Reboot (or into the firmware settings).
     Reboot {
         /// Into the firmware settings.
@@ -384,7 +384,7 @@ impl App {
                 }
                 Key::Enter if self.erase == "ERASE" => {
                     self.step = Step::Install;
-                    vec![Effect::Install(self.answers())]
+                    vec![Effect::Install(Box::new(self.answers()))]
                 }
                 _ => vec![],
             },
@@ -423,7 +423,7 @@ impl App {
                 self.keymap_test.pop();
             }
             Key::Char(c) if self.focus == 0 && self.keymap_test.len() < 24 => {
-                self.keymap_test.push(c)
+                self.keymap_test.push(c);
             }
             Key::Up => self.mode = self.mode.saturating_sub(1),
             Key::Down => self.mode = (self.mode + 1).min(MODES.len() - 1),
@@ -496,16 +496,17 @@ impl App {
             Key::Char(c) if editing => self.net[self.net_focus - 1].push(c),
             Key::Char('t') => return vec![Effect::TestNetwork],
             Key::Esc => self.step = Step::Disks,
-            Key::Enter => match self.problem() {
-                Some(problem) => self.error = Some(problem),
-                None => {
+            Key::Enter => {
+                if let Some(problem) = self.problem() {
+                    self.error = Some(problem);
+                } else {
                     self.error = None;
                     self.step = Step::Admin;
                     if self.token.is_empty() {
                         return vec![Effect::MakeSecrets];
                     }
                 }
-            },
+            }
             _ => {}
         }
         vec![]
@@ -515,7 +516,7 @@ impl App {
     pub fn done(&mut self, done: Done) {
         match done {
             Done::Secrets(Ok((token, pin))) => (self.token, self.pin) = (token, pin),
-            Done::Secrets(Err(e)) => self.error = Some(e),
+            Done::Secrets(Err(e)) | Done::Installed(Err(e)) => self.error = Some(e),
             Done::Tested(lines) => self.net_test = lines,
             Done::Progress(i, phase) => {
                 if let Some(step) = self.progress.get_mut(i) {
@@ -528,7 +529,6 @@ impl App {
                 self.log.drain(..excess);
             }
             Done::Installed(Ok(())) => self.step = Step::Done,
-            Done::Installed(Err(e)) => self.error = Some(e),
             Done::Installs(found) => self.installs = found,
             Done::Rescued(result) => self.rescued = Some(result),
         }

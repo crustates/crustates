@@ -53,7 +53,7 @@ fn panel(
         inner.width.saturating_sub(2),
         inner.height.saturating_sub(1),
     );
-    Paragraph::new(lines)
+    Paragraph::new(fit(lines, text.width, text.height))
         .wrap(Wrap { trim: false })
         .render(text, buf);
 }

@@ -139,6 +139,7 @@ impl Answers {
     /// # Errors
     ///
     /// Says what is wrong, in words for the screen.
+    #[allow(clippy::too_many_lines, reason = "one check after the other")]
     pub fn check(&self, disks: &[(String, u64)]) -> Result<(), String> {
         if !self.erase {
             return Err("erase = true is missing: the install erases the boot disk".into());

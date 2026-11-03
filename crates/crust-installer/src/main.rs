@@ -296,6 +296,7 @@ fn demo_facts() -> Facts {
     }
 }
 
+#[allow(clippy::too_many_lines, reason = "one arm per effect")]
 async fn interactive(
     terminal: &mut ratatui::DefaultTerminal,
     version: &str,
@@ -355,6 +356,7 @@ async fn interactive(
                     });
                 }
                 Effect::Install(answers) => {
+                    let answers = *answers;
                     app.progress = install::steps(&answers)
                         .into_iter()
                         .map(|s| (s, app::Phase::Next))
