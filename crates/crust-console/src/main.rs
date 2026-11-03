@@ -89,6 +89,9 @@ fn main() -> anyhow::Result<()> {
 /// font's characters (ASCII if the font did not load).
 fn set_up_vt() -> Glyphs {
     use std::io::Write;
+    // Kernel messages go to tty12 instead of over the console; the journal
+    // and the serial port still have them.
+    let _ = std::process::Command::new("setterm").args(["--msgredirect", "12"]).status();
     print!("{}", palette::vt_palette());
     let _ = std::io::stdout().flush();
     // Past 240 columns at 8×16, the doubled font keeps text readable.
@@ -174,7 +177,13 @@ async fn run_console<S: System>(
         })
     };
     let mut ticks = tokio::time::interval(Duration::from_secs(1));
+    let mut repainted = Instant::now();
     loop {
+        // Anything else that writes to the terminal is painted over now and then.
+        if vt && repainted.elapsed() > Duration::from_secs(30) {
+            terminal.clear()?;
+            repainted = Instant::now();
+        }
         terminal.draw(|frame| {
             let buf = frame.buffer_mut();
             screens::draw(&app, buf, Instant::now());
