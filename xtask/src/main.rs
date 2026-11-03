@@ -1,7 +1,10 @@
 //! Build tasks: `cargo xtask ci` runs what CI runs; `cargo xtask openapi`
 //! writes the API description to `sdk/openapi.json`; `cargo xtask molt`
-//! builds, boots and tests the OS image (see `molt.rs`).
+//! builds, boots and tests the OS image (see `molt.rs`); `cargo xtask
+//! console-font` and `cargo xtask splash` make the console font and the
+//! boot splash's images (see `console.rs`).
 
+mod console;
 mod molt;
 
 use std::path::{Path, PathBuf};
@@ -15,7 +18,9 @@ fn main() -> anyhow::Result<()> {
         Some("ci") => ci(),
         Some("openapi") => openapi(),
         Some("molt") => molt::main(&args[1..]),
-        _ => bail!("usage: cargo xtask <ci|openapi|molt>"),
+        Some("console-font") => console::font(&args[1..]),
+        Some("splash") => console::splash(&args[1..]),
+        _ => bail!("usage: cargo xtask <ci|openapi|molt|console-font|splash>"),
     }
 }
 

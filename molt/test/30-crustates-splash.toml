@@ -1,0 +1,3 @@
+# Test image only: the splash without `quiet`, so the serial log keeps the
+# kernel's and systemd's messages (the boot test watches it for stalls).
+kargs = ["rhgb"]

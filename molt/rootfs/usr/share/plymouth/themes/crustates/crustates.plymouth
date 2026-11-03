@@ -1,0 +1,8 @@
+[Plymouth Theme]
+Name=Crustates
+Description=The crab, the name and the boot progress
+ModuleName=script
+
+[script]
+ImageDir=/usr/share/plymouth/themes/crustates
+ScriptFile=/usr/share/plymouth/themes/crustates/crustates.script

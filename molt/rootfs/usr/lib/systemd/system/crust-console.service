@@ -1,0 +1,25 @@
+# The local console on the machine's screen (ADR 0018): status, the first-boot
+# secrets and the recovery menu, on tty1 instead of a login prompt.
+[Unit]
+Description=Crustates local console
+Documentation=https://github.com/crustates/crustates/blob/development/docs/install.md
+After=systemd-user-sessions.service plymouth-quit-wait.service crust-firstboot.service
+Conflicts=getty@tty1.service
+
+[Service]
+ExecStart=/usr/bin/crust-console
+# The API's port and the admin token file, as crust-api has them.
+EnvironmentFile=/usr/lib/crustates/crust-api.env
+EnvironmentFile=-/etc/crustates/crust-api.env
+Environment=TERM=linux
+StandardInput=tty
+StandardOutput=tty
+TTYPath=/dev/tty1
+TTYReset=yes
+TTYVHangup=yes
+# Nothing to log in to: whenever it stops, it comes back.
+Restart=always
+RestartSec=2
+
+[Install]
+WantedBy=multi-user.target

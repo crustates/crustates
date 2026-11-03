@@ -1,0 +1,44 @@
+# The Crustates boot splash (design kit: lc-splash). The images come from
+# `cargo xtask splash`; the build writes the version in place of @VERSION@.
+
+Window.SetBackgroundTopColor(0.078, 0.078, 0.078);
+Window.SetBackgroundBottomColor(0.078, 0.078, 0.078);
+width = Window.GetWidth();
+height = Window.GetHeight();
+
+mark = Sprite(Image("mark.png"));
+mark.SetPosition(width / 2 - mark.GetImage().GetWidth() / 2, height / 2 - 150, 1);
+
+name = Sprite(Image.Text("crustates", 1.0, 0.965, 0.898, 1, "JetBrains Mono Bold 34"));
+name.SetPosition(width / 2 - name.GetImage().GetWidth() / 2, height / 2 - 20, 1);
+
+bar_width = 320;
+bar_height = 8;
+bar_x = width / 2 - bar_width / 2;
+bar_y = height / 2 + 50;
+frame = Sprite(Image("frame.png").Scale(bar_width, bar_height));
+frame.SetPosition(bar_x, bar_y, 1);
+track = Sprite(Image("track.png").Scale(bar_width - 4, bar_height - 4));
+track.SetPosition(bar_x + 2, bar_y + 2, 2);
+fill_image = Image("fill.png");
+fill = Sprite();
+fill.SetPosition(bar_x + 2, bar_y + 2, 3);
+
+fun progress_callback(duration, progress) {
+    fill_width = Math.Int((bar_width - 4) * progress);
+    if (fill_width > 0)
+        fill.SetImage(fill_image.Scale(fill_width, bar_height - 4));
+}
+Plymouth.SetBootProgressFunction(progress_callback);
+
+status = Sprite();
+fun status_callback(text) {
+    image = Image.Text(text, 0.725, 0.698, 0.647, 1, "JetBrains Mono 12");
+    status.SetImage(image);
+    status.SetPosition(width / 2 - image.GetWidth() / 2, bar_y + 28, 1);
+}
+Plymouth.SetUpdateStatusFunction(status_callback);
+Plymouth.SetMessageFunction(status_callback);
+
+version = Sprite(Image.Text("Crustates @VERSION@", 0.45, 0.43, 0.40, 1, "JetBrains Mono 11"));
+version.SetPosition(24, height - 36, 1);
