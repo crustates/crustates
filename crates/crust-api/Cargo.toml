@@ -12,6 +12,7 @@ workspace = true
 
 [dependencies]
 anyhow.workspace = true
+argon2.workspace = true
 axum.workspace = true
 crust-proto.workspace = true
 crust-reconcile.workspace = true
@@ -19,6 +20,7 @@ crust-store.workspace = true
 crust-types.workspace = true
 figment.workspace = true
 futures.workspace = true
+getrandom.workspace = true
 jiff.workspace = true
 serde.workspace = true
 serde_json.workspace = true
@@ -34,6 +36,8 @@ utoipa-axum.workspace = true
 utoipa-scalar.workspace = true
 
 [dev-dependencies]
-crust-agent.workspace = true
+crust-agent = { workspace = true, features = ["fake"] }
 http-body-util.workspace = true
+reqwest.workspace = true
+tempfile.workspace = true
 tower.workspace = true

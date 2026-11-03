@@ -12,7 +12,7 @@
   "paths": {
     "/healthz": {
       "get": {
-        "summary": "Reports that the API is up, with its version.",
+        "summary": "Reports that the API is up, with its version. Needs no token.",
         "operationId": "healthz",
         "responses": {
           "200": {
@@ -20,6 +20,60 @@
               "application/json": {
                 "schema": {
                   "$ref": "#/components/schemas/Health"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {}
+        ]
+      }
+    },
+    "/v1/audit": {
+      "get": {
+        "tags": [
+          "audit"
+        ],
+        "summary": "Reads the audit log, newest first.",
+        "operationId": "audit_log",
+        "parameters": [
+          {
+            "name": "limit",
+            "in": "path",
+            "description": "How many entries, newest first (1 to 1000).",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "format": "int32",
+              "minimum": 0
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AuditLog"
+                }
+              }
+            }
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            }
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
                 }
               }
             }
@@ -61,6 +115,15 @@
               }
             }
           },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            }
+          },
           "500": {
             "content": {
               "application/json": {
@@ -78,7 +141,7 @@
         "tags": [
           "nodes"
         ],
-        "summary": "Reads one node.",
+        "summary": "Reads one node, including its Molt status.",
         "operationId": "get_node",
         "parameters": [
           {
@@ -97,6 +160,15 @@
               "application/json": {
                 "schema": {
                   "$ref": "#/components/schemas/Node"
+                }
+              }
+            }
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
                 }
               }
             }
@@ -121,10 +193,334 @@
           }
         }
       }
+    },
+    "/v1/nodes/{name}/molt/enroll-key": {
+      "post": {
+        "tags": [
+          "molt"
+        ],
+        "summary": "Queues the Crustates module-signing certificate for enrolment as a\nMachine Owner Key, so the node's own modules load with Secure Boot on.\nSomeone at the machine confirms it at the next boot with the returned\none-time password.",
+        "operationId": "molt_enroll_key",
+        "parameters": [
+          {
+            "name": "name",
+            "in": "path",
+            "description": "The node name",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Enrolment"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "No such node",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Secure Boot is off, or the key cannot be enrolled",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "The node's agent is not connected",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/nodes/{name}/molt/policy": {
+      "put": {
+        "tags": [
+          "molt"
+        ],
+        "summary": "Sets how the node applies updates.",
+        "operationId": "molt_policy",
+        "parameters": [
+          {
+            "name": "name",
+            "in": "path",
+            "description": "The node name",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/PolicyChange"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Outcome"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "The window is not HH:MM-HH:MM",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "No such node",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "The node's agent is not connected",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/nodes/{name}/molt/rollback": {
+      "post": {
+        "tags": [
+          "molt"
+        ],
+        "summary": "Makes the previous image the one that boots next. With `reboot`, the\nnode reboots into it.",
+        "operationId": "molt_rollback",
+        "parameters": [
+          {
+            "name": "name",
+            "in": "path",
+            "description": "The node name",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/RebootChoice"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Outcome"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "No such node",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "There is nothing to roll back to",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "The node's agent is not connected",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/nodes/{name}/molt/upgrade": {
+      "post": {
+        "tags": [
+          "molt"
+        ],
+        "summary": "Checks the node's channel and stages a newer image if there is one. Its\nsignature is checked first. With `reboot`, the node reboots into it.",
+        "operationId": "molt_upgrade",
+        "parameters": [
+          {
+            "name": "name",
+            "in": "path",
+            "description": "The node name",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/RebootChoice"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Outcome"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "No such node",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "The node could not stage the image",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "The node's agent is not connected",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            }
+          }
+        }
+      }
     }
   },
   "components": {
     "schemas": {
+      "AuditEntry": {
+        "type": "object",
+        "description": "One entry in the audit log: who changed what, and whether it worked.",
+        "required": [
+          "time",
+          "principal",
+          "action",
+          "target",
+          "outcome"
+        ],
+        "properties": {
+          "action": {
+            "type": "string",
+            "description": "What was done, for example `molt.upgrade`."
+          },
+          "outcome": {
+            "type": "string",
+            "description": "`ok`, or why it failed."
+          },
+          "principal": {
+            "type": "string",
+            "description": "Who did it, for example `admin token`."
+          },
+          "target": {
+            "type": "string",
+            "description": "What it was done to, for example `node/attic`."
+          },
+          "time": {
+            "type": "string",
+            "format": "date-time",
+            "description": "When it happened."
+          }
+        }
+      },
+      "AuditLog": {
+        "type": "object",
+        "description": "The newest audit entries.",
+        "required": [
+          "items"
+        ],
+        "properties": {
+          "items": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/AuditEntry"
+            },
+            "description": "Newest first."
+          }
+        }
+      },
       "Condition": {
         "type": "object",
         "description": "The state of one aspect of a resource, as in Kubernetes conditions.",
@@ -167,6 +563,24 @@
           "False",
           "Unknown"
         ]
+      },
+      "Enrolment": {
+        "type": "object",
+        "description": "A queued key enrolment.",
+        "required": [
+          "message",
+          "password"
+        ],
+        "properties": {
+          "message": {
+            "type": "string",
+            "description": "What to do next, at the machine."
+          },
+          "password": {
+            "type": "string",
+            "description": "The one-time password to type in the MOK manager at the next boot."
+          }
+        }
       },
       "ErrorBody": {
         "type": "object",
@@ -243,6 +657,134 @@
             "type": "string",
             "format": "date-time",
             "description": "When the resource was last written."
+          }
+        }
+      },
+      "MoltImage": {
+        "type": "object",
+        "description": "One Molt image on a node.",
+        "required": [
+          "image",
+          "digest",
+          "version",
+          "verified"
+        ],
+        "properties": {
+          "digest": {
+            "type": "string",
+            "description": "The image's manifest digest, `sha256:…`."
+          },
+          "image": {
+            "type": "string",
+            "description": "The image reference it was pulled from."
+          },
+          "verified": {
+            "type": "boolean",
+            "description": "Whether this node checked the image's signature before staging it."
+          },
+          "version": {
+            "type": "string",
+            "description": "The Molt version, for example `0.1.0`; empty if the image has none."
+          }
+        }
+      },
+      "MoltStatus": {
+        "type": "object",
+        "description": "A node's Molt OS image: what runs, what comes next, and how it updates.",
+        "required": [
+          "repository",
+          "channel",
+          "policy",
+          "window",
+          "automatic_rollback"
+        ],
+        "properties": {
+          "automatic_rollback": {
+            "type": "boolean",
+            "description": "Whether a new image that fails to boot or fails its health check is\nrolled back by itself. Needs the boot counter in the boot loader."
+          },
+          "available": {
+            "oneOf": [
+              {
+                "$ref": "#/components/schemas/MoltImage",
+                "description": "A newer image on the channel that is not staged yet."
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "bad_digests": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "description": "Image digests that failed their health check here; they are never\nstaged again."
+          },
+          "booted": {
+            "oneOf": [
+              {
+                "$ref": "#/components/schemas/MoltImage",
+                "description": "The image the node runs now."
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "channel": {
+            "type": "string",
+            "description": "The channel the node follows: the tag it checks for updates."
+          },
+          "last_check": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "format": "date-time",
+            "description": "When the node last checked its channel."
+          },
+          "last_error": {
+            "type": "string",
+            "description": "Why the last check or update failed; empty if it worked."
+          },
+          "policy": {
+            "$ref": "#/components/schemas/UpdatePolicy",
+            "description": "When updates are applied."
+          },
+          "repository": {
+            "type": "string",
+            "description": "The image repository, for example `ghcr.io/crustates/molt`."
+          },
+          "rollback": {
+            "oneOf": [
+              {
+                "$ref": "#/components/schemas/MoltImage",
+                "description": "The image that ran before, kept to roll back to."
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "rollback_queued": {
+            "type": "boolean",
+            "description": "Whether the rollback image boots next instead of the booted one."
+          },
+          "staged": {
+            "oneOf": [
+              {
+                "$ref": "#/components/schemas/MoltImage",
+                "description": "An image downloaded and ready; it runs after the next reboot."
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "window": {
+            "type": "string",
+            "description": "When automatic updates may reboot the node, in local time."
           }
         }
       },
@@ -335,15 +877,97 @@
             "format": "int64",
             "description": "Total memory in bytes.",
             "minimum": 0
+          },
+          "molt": {
+            "oneOf": [
+              {
+                "$ref": "#/components/schemas/MoltStatus",
+                "description": "The node's OS image and its updates, if the node runs Molt."
+              },
+              {
+                "type": "null"
+              }
+            ]
           }
         }
+      },
+      "Outcome": {
+        "type": "object",
+        "description": "What a node did.",
+        "required": [
+          "message"
+        ],
+        "properties": {
+          "message": {
+            "type": "string",
+            "description": "What happened, for people."
+          }
+        }
+      },
+      "PolicyChange": {
+        "type": "object",
+        "description": "An update policy to set.",
+        "required": [
+          "policy"
+        ],
+        "properties": {
+          "policy": {
+            "$ref": "#/components/schemas/UpdatePolicy",
+            "description": "`auto` stages new images and reboots in the window; `manual` only\nreports them."
+          },
+          "window": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "description": "When automatic updates may reboot, `HH:MM-HH:MM` in the node's local\ntime. Unchanged if left out."
+          }
+        }
+      },
+      "RebootChoice": {
+        "type": "object",
+        "description": "Whether to reboot right after the change.",
+        "properties": {
+          "reboot": {
+            "type": "boolean",
+            "description": "Reboot right away instead of at the next reboot (or, with the\n`auto` policy, in the update window)."
+          }
+        }
+      },
+      "UpdatePolicy": {
+        "type": "string",
+        "description": "When a node applies Molt updates.",
+        "enum": [
+          "auto",
+          "manual"
+        ]
+      }
+    },
+    "securitySchemes": {
+      "admin_token": {
+        "type": "http",
+        "scheme": "bearer",
+        "description": "The admin token, `crt_…`, shown on the machine's screen at its first boot."
       }
     }
   },
+  "security": [
+    {
+      "admin_token": []
+    }
+  ],
   "tags": [
     {
       "name": "nodes",
       "description": "Machines that run the node agent"
+    },
+    {
+      "name": "molt",
+      "description": "The Molt OS image of each node and its updates"
+    },
+    {
+      "name": "audit",
+      "description": "Who changed what"
     }
   ]
 }

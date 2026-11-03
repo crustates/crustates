@@ -7,6 +7,12 @@ service NodeService {
   // Reports this node's facts. The first report registers the node; every
   // report counts as a heartbeat.
   rpc Report(ReportRequest) returns (ReportResponse);
+  // Streams commands for this node. The agent keeps one stream open and
+  // answers each command with CompleteCommand. A new stream for the same node
+  // replaces the old one.
+  rpc Commands(CommandsRequest) returns (stream Command);
+  // Returns the result of a command received on the Commands stream.
+  rpc CompleteCommand(CommandResult) returns (CompleteCommandResponse);
 }
 
 message ReportRequest {
@@ -18,6 +24,90 @@ message ReportRequest {
   string kernel = 4;
   uint32 cpus = 5;
   uint64 memory_bytes = 6;
+  // Unset when the node does not run Molt.
+  MoltStatus molt = 7;
 }
 
 message ReportResponse {}
+
+// The node's Molt OS image and its updates; see crust_types::MoltStatus.
+message MoltStatus {
+  MoltImage booted = 1;
+  MoltImage staged = 2;
+  MoltImage rollback = 3;
+  MoltImage available = 4;
+  string repository = 5;
+  string channel = 6;
+  UpdatePolicy policy = 7;
+  string window = 8;
+  // Unix seconds; 0 when the node never checked.
+  int64 last_check = 9;
+  string last_error = 10;
+  repeated string bad_digests = 11;
+  bool automatic_rollback = 12;
+  bool rollback_queued = 13;
+}
+
+message MoltImage {
+  string image = 1;
+  string digest = 2;
+  string version = 3;
+  bool verified = 4;
+}
+
+enum UpdatePolicy {
+  UPDATE_POLICY_UNSPECIFIED = 0;
+  UPDATE_POLICY_AUTO = 1;
+  UPDATE_POLICY_MANUAL = 2;
+}
+
+message CommandsRequest {
+  // The node's resource name.
+  string name = 1;
+}
+
+message Command {
+  // Unique per control plane run; CommandResult names it.
+  uint64 id = 1;
+  oneof kind {
+    MoltUpgrade molt_upgrade = 2;
+    MoltRollback molt_rollback = 3;
+    MoltPolicy molt_policy = 4;
+    MoltEnrollKey molt_enroll_key = 5;
+  }
+}
+
+// Checks the channel and stages a newer image.
+message MoltUpgrade {
+  // Reboot into the new image right away.
+  bool reboot = 1;
+}
+
+// Makes the previous image the one that boots next.
+message MoltRollback {
+  // Reboot into it right away.
+  bool reboot = 1;
+}
+
+message MoltPolicy {
+  UpdatePolicy policy = 1;
+  // HH:MM-HH:MM in the node's local time.
+  string window = 2;
+}
+
+// Queues the Crustates module-signing certificate for enrolment as a Machine
+// Owner Key.
+message MoltEnrollKey {}
+
+message CommandResult {
+  uint64 id = 1;
+  // Empty when the command worked.
+  string error = 2;
+  // What happened, for people.
+  string message = 3;
+  // A one-time secret the admin needs, such as the MOK password; empty
+  // otherwise. Never logged.
+  string secret = 4;
+}
+
+message CompleteCommandResponse {}

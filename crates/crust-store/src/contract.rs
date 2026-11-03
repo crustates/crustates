@@ -12,7 +12,7 @@ use std::time::Duration;
 use futures::StreamExt;
 use serde::{Deserialize, Serialize};
 
-use crust_types::Kind;
+use crust_types::{AuditEntry, Kind};
 
 use crate::{Error, Event, Store};
 
@@ -49,6 +49,7 @@ pub async fn run<S: Store>(store: S) {
     update_missing_fails(&store).await;
     list_is_per_kind_and_sorted(&store).await;
     watch_sees_changes_in_order(&store).await;
+    audit_log_is_newest_first_and_limited(&store).await;
 }
 
 async fn create_then_get<S: Store>(store: &S) {
@@ -196,6 +197,29 @@ async fn watch_sees_changes_in_order<S: Store>(store: &S) {
     assert_eq!(next(&mut events).await, Event::Created(created));
     // The Gadget change is filtered out; the next Widget event is the update.
     assert_eq!(next(&mut events).await, Event::Updated(updated));
+}
+
+async fn audit_log_is_newest_first_and_limited<S: Store>(store: &S) {
+    assert!(store.audit_log(10).await.expect("empty log").is_empty());
+    // Equal times: the order of writing decides.
+    let time = jiff::Timestamp::now();
+    for action in ["first", "second", "third"] {
+        store
+            .audit(AuditEntry {
+                time,
+                principal: "admin token".into(),
+                action: action.into(),
+                target: "node/a".into(),
+                outcome: "ok".into(),
+            })
+            .await
+            .expect("audit");
+    }
+    let log = store.audit_log(2).await.expect("audit log");
+    let actions: Vec<&str> = log.iter().map(|e| e.action.as_str()).collect();
+    assert_eq!(actions, ["third", "second"]);
+    assert_eq!(log[0].time, time);
+    assert_eq!(log[0].target, "node/a");
 }
 
 async fn next<K: Kind>(events: &mut (impl futures::Stream<Item = Event<K>> + Unpin)) -> Event<K> {

@@ -1,7 +1,13 @@
 //! `crust-agent`: runs the node agent on this machine.
+//! `crust-agent molt-mark-bad` marks the booted Molt image as bad instead;
+//! greenboot runs it when the image fails its health check.
 
-use anyhow::Context;
+use std::sync::Arc;
+
+use anyhow::{Context, bail};
 use crust_agent::Config;
+use crust_agent::bootc::Bootc;
+use crust_agent::molt::Updater;
 use tokio_util::sync::CancellationToken;
 use tracing::info;
 use tracing_subscriber::EnvFilter;
@@ -16,9 +22,20 @@ async fn main() -> anyhow::Result<()> {
         .init();
 
     let config = Config::load().context("loading the configuration")?;
+    match std::env::args().nth(1).as_deref() {
+        None => {}
+        Some("molt-mark-bad") => {
+            let updater = Arc::new(Updater::new(Bootc, config.molt_paths()));
+            let digest = updater.mark_booted_bad().await?;
+            info!(digest, "marked the booted Molt image as bad");
+            return Ok(());
+        }
+        Some(other) => bail!("unknown argument {other:?}; the only command is molt-mark-bad"),
+    }
+    let os = Bootc::is_booted().then_some(Bootc);
     let shutdown = CancellationToken::new();
     tokio::spawn(cancel_on_signal(shutdown.clone()));
-    crust_agent::run(config, shutdown).await?;
+    crust_agent::run(config, os, shutdown).await?;
     info!("agent stopped");
     Ok(())
 }
