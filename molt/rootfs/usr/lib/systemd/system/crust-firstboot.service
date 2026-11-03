@@ -1,11 +1,9 @@
 # Makes the admin token and the recovery PIN on the machine's first boot;
 # the console shows them until they are confirmed or the machine reboots
-# (ADR 0015, ADR 0018).
+# (ADR 0015, ADR 0018). At every other boot it only checks their owner.
 [Unit]
 Description=Crustates admin token and recovery PIN
 Documentation=https://github.com/crustates/crustates/blob/development/docs/install.md
-ConditionPathExists=|!/var/lib/crustates/secrets/admin-token
-ConditionPathExists=|!/var/lib/crustates/secrets/recovery-pin
 # After the API: starting it creates /var/lib/crustates for the crustates user
 # (or moves it there from an install that used DynamicUser=). Created first,
 # the directory would be handed to that user with everything in it.

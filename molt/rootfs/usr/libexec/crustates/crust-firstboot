@@ -3,7 +3,8 @@
 # only their argon2id hashes, where the API can read but not change them,
 # and leaves the secrets for the console to show once: in
 # /run/crustates/firstboot.json, root only, gone after a reboot (ADR 0015,
-# ADR 0018).
+# ADR 0018). Runs at every boot: hashes the installer wrote get their owner
+# and mode here, because the crustates group exists only from the first boot.
 set -euo pipefail
 umask 077
 
@@ -22,10 +23,13 @@ if [ ! -e "$secrets/recovery-pin" ]; then
     pin=$(CRUST_RECOVERY_PIN_FILE="$secrets/recovery-pin" /usr/bin/crust-api new-recovery-pin)
 fi
 for file in admin-token recovery-pin; do
-    chgrp crustates "$secrets/$file"
+    chown root:crustates "$secrets/$file"
     chmod 0640 "$secrets/$file"
 done
 
+if [ -z "$token$pin" ]; then
+    exit 0
+fi
 install -d -m 0770 -o root -g crustates /run/crustates
 jq -n --arg token "$token" --arg pin "$pin" '{token: $token, pin: $pin}' >/run/crustates/firstboot.json
 echo "made the first-boot secrets; the console shows them until someone confirms them or the machine reboots"
