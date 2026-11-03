@@ -21,6 +21,7 @@ crust-types.workspace = true
 figment.workspace = true
 getrandom.workspace = true
 jiff.workspace = true
+semver.workspace = true
 serde.workspace = true
 serde_json.workspace = true
 sha2.workspace = true

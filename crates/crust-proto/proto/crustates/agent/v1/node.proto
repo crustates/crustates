@@ -74,6 +74,7 @@ message Command {
     MoltRollback molt_rollback = 3;
     MoltPolicy molt_policy = 4;
     MoltEnrollKey molt_enroll_key = 5;
+    MoltChannel molt_channel = 6;
   }
 }
 
@@ -93,6 +94,13 @@ message MoltPolicy {
   UpdatePolicy policy = 1;
   // HH:MM-HH:MM in the node's local time.
   string window = 2;
+}
+
+// Makes the node follow another channel: stable, beta or development.
+message MoltChannel {
+  string channel = 1;
+  // Switch even if the channel holds an older version than the booted one.
+  bool allow_downgrade = 2;
 }
 
 // Queues the Crustates module-signing certificate for enrolment as a Machine

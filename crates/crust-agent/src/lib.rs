@@ -218,6 +218,7 @@ async fn execute<O: Os>(
         command::Kind::MoltRollback(_) => "molt rollback",
         command::Kind::MoltPolicy(_) => "molt policy",
         command::Kind::MoltEnrollKey(_) => "molt enroll-key",
+        command::Kind::MoltChannel(_) => "molt channel",
     };
     info!(command = command.id, name, "running a command");
     let outcome = match kind {
@@ -236,6 +237,7 @@ async fn execute<O: Os>(
                 Err(e) => Err(molt::Error::Settings(e)),
             }
         }
+        command::Kind::MoltChannel(c) => updater.set_channel(&c.channel, c.allow_downgrade).await,
         command::Kind::MoltEnrollKey(_) => updater.enroll_key().await.map(|(message, password)| {
             result.secret = password;
             message
