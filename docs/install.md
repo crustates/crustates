@@ -96,26 +96,30 @@ virt-install --name molt --memory 4096 --vcpus 2 --boot uefi \
   --disk molt-VERSION-amd64.qcow2 --import --os-variant fedora-unknown
 ```
 
-## 4. Write down the admin token
+## 4. Write down the admin token and the recovery PIN
 
 Molt has no SSH: you manage it through its API, and the API needs the
-machine's **admin token**. Molt makes it on the first boot and shows it on
-the machine's screen, above the login prompt:
+machine's **admin token**. On the first boot Molt makes it and a nine-digit
+**recovery PIN**, and its screen shows both, with a QR code of the API
+reference:
 
 ```text
-Crustates admin token: crt_XXXXX-XXXXX-XXXXX-XXXXX
-Write it down now: it is shown only until the next reboot.
-On your computer: crust --api http://192.168.1.23:8080 login
+1  From a computer on the same network, log in:
+     crust login --api http://192.168.1.23:8080
+2  Enter this admin token when it asks:
+     crt_XXXXX-XXXXX-XXXXX-XXXXX
+3  Keep the recovery PIN for this screen:
+     123 456 789
 ```
 
-Write it down before you reboot. Without it you cannot use the API, and
-until the local recovery console arrives (later in M0) the only way to get a
-new one is to reinstall.
+Write both down, then press enter. They are not shown again, after enter or
+after a reboot. The screen's risky actions ask for the PIN; with it you can
+also make a new admin token there. Without either, reinstall.
 
 ## 5. Log in
 
-The screen also shows the API address. Or look in your router's list of
-connected devices. Open `http://ADDRESS:8080/docs` in a browser for the API
+The screen shows the API address; so does your router's list of connected
+devices. Open `http://ADDRESS:8080/docs` in a browser for the API
 reference, or use the CLI:
 
 ```sh
@@ -131,6 +135,29 @@ shows as `Ready` within a few seconds.
 > **The API speaks plain HTTP for now** (TLS comes with ingress in M2), so the
 > token crosses the network unencrypted. Only connect Molt to a network you
 > trust.
+
+## The console on the machine's screen
+
+After the first boot the screen shows the **recovery console**: whether the
+API and the agent run, the address, the update state, and a menu.
+
+| Key      | What                                                                      |
+| -------- | ------------------------------------------------------------------------- |
+| `1`      | Show and change the network: DHCP or a fixed address, DNS, hostname, VLAN |
+| `2`      | Reset the network to DHCP                                                 |
+| `3`      | Roll back to the previous OS image                                        |
+| `4`      | Make a new admin token; the old one stops working                         |
+| `5`      | Diagnostics: services, this boot, disk health (SMART), connection tests   |
+| `6`, `7` | Reboot, shut down                                                         |
+| `alt+f2` | The system log (`alt+f1` goes back)                                       |
+
+Actions 2, 3, 4, 6 and 7, and network changes, ask for the recovery PIN.
+Five wrong PINs lock it for 15 minutes; every attempt is in the audit log
+(`GET /v1/audit`). A network change reverts by itself after 60 seconds
+unless you press `c` to keep it, so a typo cannot lock you out.
+
+After an update, the first boot of the new image shows its health checks.
+If one fails, Molt goes back to the previous image by itself.
 
 ## Secure Boot
 

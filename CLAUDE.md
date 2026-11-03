@@ -56,6 +56,8 @@ Code names stay plain: a crate or module is `vm-driver`, not `tide-driver`.
 | `crates/crust-api`       | Control plane: REST API, `/docs`, agent service  |
 | `crates/crust-agent`     | Node agent                                       |
 | `crates/crust-cli`       | The `crust` CLI                                  |
+| `crates/crust-tui`       | Palette, console font, widgets of text screens   |
+| `crates/crust-console`   | The console on the machine's screen (tty1, tty2) |
 | `xtask/`                 | `cargo xtask` build tasks                        |
 | `molt/`                  | Molt OS image: Containerfile, rootfs, selftest   |
 | `sdk/`                   | Client SDK and `openapi.json` (Apache-2.0)       |
@@ -80,6 +82,11 @@ this.
   (`CRUST_AGENT_*` variables). Molt updates only run on a bootc machine.
 - `cargo run -p crust-cli -- login`, then `-- node list`: the CLI against the
   local API.
+- `cargo run -p crust-console -- --demo` (or `-- --logs --demo`): the console
+  with example data in any terminal. Screen changes update the insta
+  snapshots in `crates/crust-console/src/snapshots`
+  (`INSTA_UPDATE=always cargo test -p crust-console`, then review them).
+  ADR 0018 covers the console, its socket and the recovery PIN.
 - `cargo xtask openapi`: regenerates `sdk/openapi.json`; run it after changing
   the API and commit the result.
 - `cargo xtask molt build | run | test`: builds the Molt image with podman,
