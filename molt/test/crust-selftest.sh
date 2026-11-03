@@ -132,6 +132,14 @@ code=$(setpriv --reuid=nobody --regid=nobody --clear-groups curl -s -o /dev/null
 [ "$code" != 200 ] || fail "the local socket served a user who is not root"
 [ -s /usr/lib/kbd/consolefonts/crustates-console-16.psfu ] || fail "the console font is missing"
 
+# Installed from the ISO (cargo xtask molt test-install): the answers file
+# named the host and asked for a mirrored pool, which must be imported.
+if [ -s "$fw_cfg" ]; then
+    [ "$(hostname)" = install-test ] || fail "the hostname is $(hostname), want install-test from the answers file"
+    retry 60 sh -c 'zpool list -H -o health tank | grep -qx ONLINE' ||
+        fail "the pool the installer made is not imported: $(zpool import 2>&1 | tr '\n' ' ')"
+fi
+
 # The boot splash is in the initramfs, ZFS is not.
 initramfs="/usr/lib/modules/$(uname -r)/initramfs.img"
 lsinitrd "$initramfs" | grep -q 'plymouth/themes/crustates/crustates.script' || fail "the initramfs has no Crustates splash"

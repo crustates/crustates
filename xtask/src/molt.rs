@@ -12,6 +12,12 @@
 //!   `release` environment secrets
 //! - `images [IMAGE]`: makes the release disk images (qcow2, raw.zst) from
 //!   IMAGE, by default the built `molt:dev`, into `target/molt/images/dist`
+//! - `iso [IMAGE]`: makes the install ISO for IMAGE (by default the built
+//!   `molt:dev`; a registry image by digest keeps the digests the release
+//!   signed) into `target/molt/iso`
+//! - `test-install`: builds the test image and its ISO, installs it on an
+//!   empty VM with an answers file and a mirrored pool, boots the installed
+//!   disk and waits for the selftest
 //!
 //! `MOLT_ACCEL=tcg` boots without KVM (slow); see `molt/tools/boot-vm`.
 //! `MOLT_TEST_SECS` lengthens how long a test waits for each selftest.
@@ -31,6 +37,13 @@ const REGISTRY_IMAGE: &str = "ghcr.io/distribution/distribution:3.1.2@sha256:d10
 const REGISTRY_PORT: u16 = 15000;
 /// How long an upgrade (download and stage) may take.
 const UPGRADE_TIMEOUT_SECS: u32 = 1800;
+/// image-builder, for the install ISO (its `generic-iso` type, under the
+/// name every version knows), pinned by digest; Renovate bumps it.
+const ISO_BUILDER: &str = "ghcr.io/osbuild/image-builder:v89.0.0@sha256:27d349fee2944029a9e47f5b8db5f4bf68392bc7878909d0c53ad8ddadb1a412";
+/// The install media image `molt iso` builds.
+const INSTALLER_IMAGE: &str = "localhost/crustates/molt-installer:dev";
+/// How long installing from the ISO may take.
+const INSTALL_TIMEOUT: Duration = Duration::from_mins(45);
 /// bootc-image-builder, pinned by digest; Renovate bumps it.
 const IMAGE_BUILDER: &str = "quay.io/centos-bootc/bootc-image-builder@sha256:b858892139e0779d48869a4dd8cbbc4e257da49f5a4b502824a55d221ed65a55";
 const TOOLS_IMAGE: &str = "localhost/crustates/molt-tools:dev";
@@ -59,7 +72,11 @@ pub fn main(args: &[String]) -> anyhow::Result<()> {
         Some("test") => self_test(upgrade),
         Some("keygen") => keygen(),
         Some("images") => images(args.get(1).map(String::as_str)),
-        _ => bail!("usage: cargo xtask molt <build|run|test|keygen|images> [--test] [--upgrade]"),
+        Some("iso") => iso(args.get(1).map(String::as_str)).map(|_| ()),
+        Some("test-install") => test_install(),
+        _ => bail!(
+            "usage: cargo xtask molt <build|run|test|keygen|images|iso|test-install> [--test] [--upgrade]"
+        ),
     }
 }
 
@@ -660,6 +677,269 @@ fn image_builder(image: &str, out: &Path, types: &[&str]) -> anyhow::Result<()> 
     }
     args.push(image);
     podman(&args)
+}
+
+/// `amd64` or `arm64`.
+fn arch() -> anyhow::Result<&'static str> {
+    match std::env::consts::ARCH {
+        "x86_64" => Ok("amd64"),
+        "aarch64" => Ok("arm64"),
+        other => bail!("no Molt images for {other}"),
+    }
+}
+
+/// Makes the install ISO for `image` (ADR 0019): the image goes in as an
+/// OCI layout, the installer image is built FROM it, and image-builder turns
+/// that into `target/molt/iso/crustates-VERSION-ARCH.iso`.
+fn iso(image: Option<&str>) -> anyhow::Result<PathBuf> {
+    let image = image.unwrap_or(self::image(false));
+    let out = root().join("target/molt/iso");
+    let payload = out.join("payload");
+    std::fs::create_dir_all(&out).with_context(|| format!("creating {}", out.display()))?;
+    // Root may own an older payload (sudo podman); the container removes it.
+    let (source, preserve) = if image.starts_with("localhost/") {
+        (format!("containers-storage:{image}"), None)
+    } else {
+        (format!("docker://{image}"), Some("--preserve-digests"))
+    };
+    let mount = format!("{}:/out", out.display());
+    let copy = format!(
+        "rm -rf /out/payload && skopeo copy {} {source} oci:/out/payload",
+        preserve.unwrap_or_default()
+    );
+    podman(&[
+        "run",
+        "--rm",
+        "--privileged",
+        "--security-opt",
+        "label=type:unconfined_t",
+        "-v",
+        "/var/lib/containers/storage:/var/lib/containers/storage",
+        "-v",
+        &mount,
+        "--entrypoint",
+        "bash",
+        image,
+        "-c",
+        &copy,
+    ])?;
+    let molt = format!("MOLT={image}");
+    let context = format!("payload={}", payload.display());
+    podman(&[
+        "build",
+        "-f",
+        "molt/installer/Containerfile",
+        "--build-arg",
+        &molt,
+        "--build-context",
+        &context,
+        "-t",
+        INSTALLER_IMAGE,
+        ".",
+    ])?;
+    let name = format!("crustates-{}-{}", env!("CARGO_PKG_VERSION"), arch()?);
+    let output = format!("{}:/output", out.display());
+    podman(&[
+        "run",
+        "--rm",
+        "--privileged",
+        "--pull=missing",
+        "--security-opt",
+        "label=type:unconfined_t",
+        "-v",
+        "/var/lib/containers/storage:/var/lib/containers/storage",
+        "-v",
+        &output,
+        ISO_BUILDER,
+        "build",
+        "--output-dir",
+        "/output",
+        "--output-name",
+        &name,
+        "--bootc-ref",
+        INSTALLER_IMAGE,
+        "--bootc-default-fs",
+        "xfs",
+        "bootc-generic-iso",
+    ])?;
+    let iso = std::fs::read_dir(&out)
+        .with_context(|| format!("reading {}", out.display()))?
+        .filter_map(Result::ok)
+        .map(|e| e.path())
+        .chain(
+            std::fs::read_dir(out.join("bootiso"))
+                .into_iter()
+                .flatten()
+                .filter_map(Result::ok)
+                .map(|e| e.path()),
+        )
+        .find(|p| p.extension().is_some_and(|e| e == "iso"))
+        .context("image-builder made no .iso")?;
+    println!("install ISO: {}", iso.display());
+    Ok(iso)
+}
+
+/// Makes a sparse raw disk of `bytes`.
+fn blank_disk(path: &Path, bytes: u64) -> anyhow::Result<()> {
+    let file =
+        std::fs::File::create(path).with_context(|| format!("creating {}", path.display()))?;
+    file.set_len(bytes)
+        .with_context(|| format!("sizing {}", path.display()))
+}
+
+/// Waits for `CRUST-INSTALL: DONE` in `log` and returns the token and PIN
+/// the installer printed.
+fn wait_for_install(log: &Path) -> anyhow::Result<(String, String)> {
+    let start = Instant::now();
+    let (mut seen, mut last_output) = (0, Instant::now());
+    while start.elapsed() < INSTALL_TIMEOUT {
+        let serial = std::fs::read(log).unwrap_or_default();
+        let text = String::from_utf8_lossy(&serial);
+        let value = |key: &str| {
+            text.lines()
+                .rev()
+                .find_map(|l| l.split(key).nth(1))
+                .map(|v| v.trim().to_owned())
+        };
+        if let Some(fail) = value("CRUST-INSTALL: FAIL") {
+            bail!("the install failed: {fail}");
+        }
+        if text.contains("CRUST-INSTALL: DONE") {
+            let token = value("CRUST-INSTALL-TOKEN: ").context("the installer printed no token")?;
+            let pin = value("CRUST-INSTALL-PIN: ").context("the installer printed no PIN")?;
+            println!("CRUST-INSTALL: DONE after {} s", start.elapsed().as_secs());
+            return Ok((token, pin));
+        }
+        if serial.len() > seen {
+            (seen, last_output) = (serial.len(), Instant::now());
+        } else if last_output.elapsed() > STALL_TIMEOUT {
+            bail!(
+                "the installer VM stalled: no serial output for {} s",
+                STALL_TIMEOUT.as_secs()
+            );
+        }
+        std::thread::sleep(Duration::from_secs(2));
+    }
+    bail!(
+        "no CRUST-INSTALL: DONE within {} s",
+        INSTALL_TIMEOUT.as_secs()
+    )
+}
+
+/// Installs the test image from its ISO onto an empty VM, with a mirrored
+/// pool on two more disks, then boots the installed disk: the selftest must
+/// pass, the pool must be there, and the API must take the installer's token.
+fn test_install() -> anyhow::Result<()> {
+    let version = env!("CARGO_PKG_VERSION");
+    build(true)?;
+    let iso = iso(Some(image(true)))?;
+    build_tools()?;
+    let out = root().join("target/molt/install-test");
+    let _ = std::fs::remove_dir_all(&out);
+    std::fs::create_dir_all(&out).with_context(|| format!("creating {}", out.display()))?;
+    blank_disk(&out.join("disk.raw"), 40_000_000_000)?;
+    blank_disk(&out.join("pool-1.raw"), 4_000_000_000)?;
+    blank_disk(&out.join("pool-2.raw"), 4_000_000_000)?;
+    std::fs::write(
+        out.join("answers.toml"),
+        "disk = \"/dev/vda\"\nerase = true\nhostname = \"install-test\"\nafter = \"poweroff\"\n\n[pool]\nname = \"tank\"\nlayout = \"mirror\"\ndisks = [\"/dev/vdb\", \"/dev/vdc\"]\n",
+    )?;
+    let iso_dir = iso.parent().context("the ISO has no directory")?;
+    let iso_name = iso
+        .file_name()
+        .context("the ISO has no name")?
+        .to_string_lossy()
+        .into_owned();
+    let vm_mount = format!("{}:/vm", out.display());
+    let iso_mount = format!("{}:/iso:ro", iso_dir.display());
+    let cdrom = format!("MOLT_CDROM=/iso/{iso_name}");
+    let extra = "MOLT_EXTRA_DISKS=/vm/pool-1.raw /vm/pool-2.raw";
+    let install_log = out.join("install.log");
+    std::fs::write(&install_log, "")?;
+    let name = format!("molt-install-{}", std::process::id());
+    let installed = (|| {
+        podman(&[
+            "run",
+            "-d",
+            "--name",
+            &name,
+            "--device",
+            "/dev/kvm",
+            "--security-opt",
+            "label=disable",
+            "-e",
+            "MOLT_ACCEL",
+            "-e",
+            &cdrom,
+            "-e",
+            "MOLT_DISK_RW=1",
+            "-e",
+            extra,
+            "-e",
+            "MOLT_FW_CFG=name=opt/crustates/answers,file=/vm/answers.toml",
+            "-v",
+            &vm_mount,
+            "-v",
+            &iso_mount,
+            TOOLS_IMAGE,
+            "/vm/disk.raw",
+            "/vm/install.log",
+        ])?;
+        let secrets = wait_for_install(&install_log)?;
+        // The installer powers the VM off when it is done.
+        podman(&["wait", &name])?;
+        Ok::<_, anyhow::Error>(secrets)
+    })();
+    let _ = podman(&["rm", "-f", &name]);
+    println!("install log: {}", install_log.display());
+    let (token, pin) = installed?;
+    std::fs::write(out.join("secrets"), format!("{token} {pin}\n"))?;
+
+    let log = out.join("serial.log");
+    std::fs::write(&log, "")?;
+    let pod = format!("molt-installed-{}", std::process::id());
+    podman(&[
+        "pod",
+        "create",
+        "--name",
+        &pod,
+        "-p",
+        &format!("{API_PORT}:8080"),
+    ])?;
+    let result = (|| {
+        podman(&[
+            "run",
+            "-d",
+            "--pod",
+            &pod,
+            "--name",
+            &format!("{pod}-vm"),
+            "--device",
+            "/dev/kvm",
+            "--security-opt",
+            "label=disable",
+            "-e",
+            "MOLT_ACCEL",
+            "-e",
+            extra,
+            "-e",
+            "MOLT_FW_CFG=name=opt/crustates/secrets,file=/vm/secrets",
+            "-v",
+            &vm_mount,
+            TOOLS_IMAGE,
+            "/vm/disk.raw",
+            "/vm/serial.log",
+        ])?;
+        let mut serial = Serial { log: &log, from: 0 };
+        let printed = serial.wait_for_pass(version, false)?;
+        if printed != token {
+            bail!("the installed system has another token than the installer printed");
+        }
+        Api::new(token).check()
+    })();
+    let _ = podman(&["pod", "rm", "-f", &pod]);
+    println!("serial log of the installed system: {}", log.display());
+    result
 }
 
 fn build_tools() -> anyhow::Result<()> {
