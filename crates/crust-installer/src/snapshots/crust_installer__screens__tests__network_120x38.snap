@@ -1,0 +1,42 @@
+---
+source: crates/crust-installer/src/screens.rs
+expression: big
+---
+ Crustates installer  0.2.0  amd64  UEFI  Secure Boot on                                                    step 4 of 6 
+                                                                                                                        
+ ┌ Steps ─────────────────────────────────────────────────────────────────────────────────────────────────────────────┐ 
+ │ [x] 1 Language   [x] 2 Hardware check   [x] 3 Disks    > 4 Network    [ ] 5 Admin   [ ] 6 Install                  │ 
+ └────────────────────────────────────────────────────────────────────────────────────────────────────────────────────┘ 
+ ┌ Management network ────────────────────────────────────────────────────────────────────────────────────────────────┐ 
+ │                                                                                                                    │ 
+ │ Address    (o) DHCP    ( ) Static                                                                                  │ 
+ │                                                                                                                    │ 
+ │   IPv4 address   ____________________                                                                              │ 
+ │   Gateway        ____________________                                                                              │ 
+ │   DNS servers    ____________________                                                                              │ 
+ │   VLAN tag       ____________________                                                                              │ 
+ │                                                                                                                    │ 
+ │   Hostname       node-1______________                                                                              │ 
+ │   Interface      enp3s0______________                                                                              │ 
+ │                                                                                                                    │ 
+ │ Without a network the install works too: updates start once the machine is online.                                 │ 
+ │                                                                                                                    │ 
+ │                                                                                                                    │ 
+ │                                                                                                                    │ 
+ │                                                                                                                    │ 
+ │                                                                                                                    │ 
+ │                                                                                                                    │ 
+ │                                                                                                                    │ 
+ │                                                                                                                    │ 
+ │                                                                                                                    │ 
+ │                                                                                                                    │ 
+ │                                                                                                                    │ 
+ │                                                                                                                    │ 
+ │                                                                                                                    │ 
+ │                                                                                                                    │ 
+ │                                                                                                                    │ 
+ │                                                                                                                    │ 
+ │                                                                                                                    │ 
+ └────────────────────────────────────────────────────────────────────────────────────────────────────────────────────┘ 
+                                                                                                                        
+  tab  next field   space  DHCP or static   t  test   enter  next   esc  back

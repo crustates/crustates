@@ -1,0 +1,42 @@
+---
+source: crates/crust-installer/src/screens.rs
+expression: big
+---
+ Crustates installer  0.2.0  amd64  UEFI  Secure Boot on                                          review before install 
+                                                                                                                        
+ ┌ Steps ─────────────────────────────────────────────────────────────────────────────────────────────────────────────┐ 
+ │ [x] 1 Language   [x] 2 Hardware check   [x] 3 Disks   [x] 4 Network    > 5 Admin    [ ] 6 Install                  │ 
+ └────────────────────────────────────────────────────────────────────────────────────────────────────────────────────┘ 
+ ┌ Review your choices ───────────────────────────────────────────────┐ ┌ These disks will be erased ─────────────────┐ 
+ │                                                                    │ │                                             │ 
+ │ Language      English · keyboard us                                │ │ !  nvme0n1    Samsung 980 PRO    500 GB     │ 
+ │ Hostname      node-1                                               │ │    empty                                    │ 
+ │ Network       enp3s0 · DHCP                                        │ │ !  sdb        WD Red Plus        4.0 TB     │ 
+ │ Boot disk     nvme0n1  Samsung 980 PRO  500 GB                     │ │    empty                                    │ 
+ │ Pool          tank · ZFS mirror of /dev/sdb + /dev/sdc             │ │ !  sdc        WD Red Plus        4.0 TB     │ 
+ │ Channel       stable · updates checked daily                       │ │    empty                                    │ 
+ │ Recovery PIN  written down                                         │ │    sde        SanDisk Ultra      32.0 GB    │ 
+ │                                                                    │ │    not selected, will not be touched        │ 
+ │ Press esc to change anything. Nothing has been written yet.        │ │                                             │ 
+ │                                                                    │ │ Type ERASE to confirm                       │ 
+ │                                                                    │ │                                             │ 
+ │                                                                    │ │    ERA_______                               │ 
+ │                                                                    │ │                                             │ 
+ │                                                                    │ │ The install starts when you press enter.    │ 
+ │                                                                    │ │                                             │ 
+ │                                                                    │ │                                             │ 
+ │                                                                    │ │                                             │ 
+ │                                                                    │ │                                             │ 
+ │                                                                    │ │                                             │ 
+ │                                                                    │ │                                             │ 
+ │                                                                    │ │                                             │ 
+ │                                                                    │ │                                             │ 
+ │                                                                    │ │                                             │ 
+ │                                                                    │ │                                             │ 
+ │                                                                    │ │                                             │ 
+ │                                                                    │ │                                             │ 
+ │                                                                    │ │                                             │ 
+ │                                                                    │ │                                             │ 
+ └────────────────────────────────────────────────────────────────────┘ └─────────────────────────────────────────────┘ 
+                                                                                                                        
+  type  ERASE to confirm   enter  install   esc  back

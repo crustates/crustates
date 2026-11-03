@@ -1,0 +1,42 @@
+---
+source: crates/crust-installer/src/screens.rs
+expression: big
+---
+ Crustates installer  0.2.0  amd64  UEFI  Secure Boot on                                                    step 1 of 6 
+                                                                                                                        
+ ┌ Steps ─────────────────────────────────────────────────────────────────────────────────────────────────────────────┐ 
+ │  > 1 Language    [ ] 2 Hardware check   [ ] 3 Disks   [ ] 4 Network   [ ] 5 Admin   [ ] 6 Install                  │ 
+ └────────────────────────────────────────────────────────────────────────────────────────────────────────────────────┘ 
+ ┌ Language ───────────────────────────────────────────────┐ ┌ Keyboard layout ───────────────────────────────────────┐ 
+ │                                                         │ │                                                        │ 
+ │  > English                                              │ │  > English (US)                                        │ 
+ │    More languages come in a later release.              │ │    English (US, international)                         │ 
+ │                                                         │ │    English (UK)                                        │ 
+ │                                                         │ │    German                                              │ 
+ │                                                         │ │    French (AZERTY)                                     │ 
+ │                                                         │ │    Type here to test: _                                │ 
+ └─────────────────────────────────────────────────────────┘ └────────────────────────────────────────────────────────┘ 
+ ┌ What do you want to do? ───────────────────────────────────────────────────────────────────────────────────────────┐ 
+ │                                                                                                                    │ 
+ │ (o) Install a new Crustates node                                                                                   │ 
+ │     Erase a disk of this machine and install Crustates on it.                                                      │ 
+ │                                                                                                                    │ 
+ │ ( ) Join an existing Crustates cluster                                                                             │ 
+ │     Comes with Cast: joining nodes is not in this release.                                                         │ 
+ │                                                                                                                    │ 
+ │ ( ) Rescue                                                                                                         │ 
+ │     Repair an install: roll back the OS, reset the network, list pools.                                            │ 
+ │                                                                                                                    │ 
+ │                                                                                                                    │ 
+ │                                                                                                                    │ 
+ │                                                                                                                    │ 
+ │                                                                                                                    │ 
+ │                                                                                                                    │ 
+ │                                                                                                                    │ 
+ │                                                                                                                    │ 
+ │                                                                                                                    │ 
+ │                                                                                                                    │ 
+ │                                                                                                                    │ 
+ └────────────────────────────────────────────────────────────────────────────────────────────────────────────────────┘ 
+                                                                                                                        
+  tab  next list   up/down  move   enter  next

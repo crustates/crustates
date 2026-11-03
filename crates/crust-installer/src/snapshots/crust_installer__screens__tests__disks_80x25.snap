@@ -1,0 +1,29 @@
+---
+source: crates/crust-installer/src/screens.rs
+expression: small
+---
+ Crustates installer  0.2.0  amd64  UEFI  Secure Boot on            step 3 of 6 
+ ┌ Steps ─────────────────────────────────────────────────────────────────────┐ 
+ │ [x] 1 Language   [x] 2 Hardware check    > 3 Disks    [ ] 4 Network   [ ] 5│ 
+ └────────────────────────────────────────────────────────────────────────────┘ 
+ ┌ Choose disks ──────────────────────────────────────────────────────────────┐ 
+ │                                                                            │ 
+ │ Boot disk (holds the read-only OS image, at least 32 GB)                   │ 
+ │                                                                            │ 
+ │ (o) nvme0n1    Samsung 980 PRO          500 GB  NVMe   empty               │ 
+ │ ( ) sdb        WD Red Plus              4.0 TB  SATA   empty               │ 
+ │ ( ) sdc        WD Red Plus              4.0 TB  SATA   empty               │ 
+ │ ( ) sde        SanDisk Ultra           32.0 GB  USB    the install stick   │ 
+ │                                                                            │ 
+ │ Storage pool disks (optional: a ZFS pool for your data; more can be added  │ 
+ │ later)                                                                     │ 
+ │                                                                            │ 
+ │ [ ] nvme0n1    Samsung 980 PRO          500 GB  NVMe   used as boot disk   │ 
+ │ [x] sdb        WD Red Plus              4.0 TB  SATA   empty               │ 
+ │ [x] sdc        WD Red Plus              4.0 TB  SATA   empty               │ 
+ │ [ ] sde        SanDisk Ultra           32.0 GB  USB    the install stick   │ 
+ │                                                                            │ 
+ │ Pool layout    ZFS mirror  (m changes it)                                  │ 
+ │ Pool name      tank                                                        │ 
+ └────────────────────────────────────────────────────────────────────────────┘ 
+  up/down  move   space  select disk   m  pool layout   enter  next   b  back

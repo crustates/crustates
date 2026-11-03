@@ -1,0 +1,42 @@
+---
+source: crates/crust-installer/src/screens.rs
+expression: big
+---
+ Crustates installer  0.2.0  amd64  UEFI  Secure Boot on                                                    step 2 of 6 
+                                                                                                                        
+ ┌ Steps ─────────────────────────────────────────────────────────────────────────────────────────────────────────────┐ 
+ │ [x] 1 Language    > 2 Hardware check    [ ] 3 Disks   [ ] 4 Network   [ ] 5 Admin   [ ] 6 Install                  │ 
+ └────────────────────────────────────────────────────────────────────────────────────────────────────────────────────┘ 
+ ┌ Hardware check ────────────────────────────────────────────────────────────────────────────────────────────────────┐ 
+ │                                                                                                                    │ 
+ │       Check               Result                                                                                   │ 
+ │ ok    CPU virtualization  Intel VT-x · 8 cores (i7-12700T)                                                         │ 
+ │ ok    IOMMU               on · 24 groups                                                                           │ 
+ │ ok    Memory              64 GB                                                                                    │ 
+ │ ok    TPM                 TPM 2.0                                                                                  │ 
+ │ warn  Secure Boot         on · Crustates key not enrolled                                                          │ 
+ │ ok    Firmware            UEFI                                                                                     │ 
+ │ ok    Disks               3 found                                                                                  │ 
+ │ ok    Network             2 ports · 1 with a link                                                                  │ 
+ │ ok    Architecture        amd64                                                                                    │ 
+ │                                                                                                                    │ 
+ │ ────────────────────────────────────────────────────────────                                                       │ 
+ │ Ready to install.                                                                                                  │ 
+ │ ! ZFS loads after `crust molt enroll-key` and one reboot.                                                          │ 
+ │                                                                                                                    │ 
+ │                                                                                                                    │ 
+ │                                                                                                                    │ 
+ │                                                                                                                    │ 
+ │                                                                                                                    │ 
+ │                                                                                                                    │ 
+ │                                                                                                                    │ 
+ │                                                                                                                    │ 
+ │                                                                                                                    │ 
+ │                                                                                                                    │ 
+ │                                                                                                                    │ 
+ │                                                                                                                    │ 
+ │                                                                                                                    │ 
+ │                                                                                                                    │ 
+ └────────────────────────────────────────────────────────────────────────────────────────────────────────────────────┘ 
+                                                                                                                        
+  enter  next   b  back

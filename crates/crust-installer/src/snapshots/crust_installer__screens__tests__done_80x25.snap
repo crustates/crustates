@@ -1,0 +1,29 @@
+---
+source: crates/crust-installer/src/screens.rs
+expression: small
+---
+ Crustates installer  0.2.0  amd64  UEFI  Secure Boot on            step 6 of 6 
+ ┌ Steps ─────────────────────────────────────────────────────────────────────┐ 
+ │ [x] 1 Language   [x] 2 Hardware check   [x] 3 Disks   [x] 4 Network   [x] 5│ 
+ └────────────────────────────────────────────────────────────────────────────┘ 
+ ┌ Installed ─────────────────────────────────────────────────────────────────┐ 
+ │                                                                            │ 
+ │ done    Write the OS image to nvme0n1                                      │ 
+ │ now     Configure the new system                                           │ 
+ │ next    Create pool tank (ZFS mirror)                                      │ 
+ │                                                                            │ 
+ │ █████████████░░░░░░░░░░░░░░░░░░░░░░░░░░░   1 of 3                          │ 
+ └────────────────────────────────────────────────────────────────────────────┘ 
+ ┌ Log ───────────────────────────────────────────────────────────────────────┐ 
+ │                                                                            │ 
+ │ Crustates is installed.                                                    │ 
+ │                                                                            │ 
+ │ Remove the USB stick, then press enter to reboot.                          │ 
+ │ The machine's screen then shows its address and the recovery console.      │ 
+ │ $ podman run … bootc install to-disk --wipe /dev/nvme0n1                   │ 
+ │ Installation complete!                                                     │ 
+ │                                                                            │ 
+ │                                                                            │ 
+ │                                                                            │ 
+ └────────────────────────────────────────────────────────────────────────────┘ 
+  enter  reboot

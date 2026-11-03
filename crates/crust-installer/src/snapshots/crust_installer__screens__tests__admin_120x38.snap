@@ -1,0 +1,42 @@
+---
+source: crates/crust-installer/src/screens.rs
+expression: big
+---
+ Crustates installer  0.2.0  amd64  UEFI  Secure Boot on                                                    step 5 of 6 
+                                                                                                                        
+ ┌ Steps ─────────────────────────────────────────────────────────────────────────────────────────────────────────────┐ 
+ │ [x] 1 Language   [x] 2 Hardware check   [x] 3 Disks   [x] 4 Network    > 5 Admin    [ ] 6 Install                  │ 
+ └────────────────────────────────────────────────────────────────────────────────────────────────────────────────────┘ 
+ ┌ Admin token and recovery PIN ──────────────────────────────────────────────────────────────────────────────────────┐ 
+ │                                                                                                                    │ 
+ │ After the install, log in from a computer on the same network:                                                     │ 
+ │                                                                                                                    │ 
+ │     crust login --api http://<this machine>:8080                                                                   │ 
+ │                                                                                                                    │ 
+ │ with this admin token:                                                                                             │ 
+ │                                                                                                                    │ 
+ │      crt_K7Q4M-2MRXV-9DPAZ-H3T8W                                                                                   │ 
+ │                                                                                                                    │ 
+ │ ────────────────────────────────────────────────────────────                                                       │ 
+ │ Recovery PIN   shown only now · write it down                                                                      │ 
+ │                                                                                                                    │ 
+ │     482 913 075                                                                                                    │ 
+ │                                                                                                                    │ 
+ │ The console on this machine's screen asks for it before risky actions: rolling back the OS, changing the network,  │ 
+ │ a new admin token, rebooting.                                                                                      │ 
+ │                                                                                                                    │ 
+ │ [x] I wrote down the admin token and the recovery PIN                                                              │ 
+ │                                                                                                                    │ 
+ │                                                                                                                    │ 
+ │                                                                                                                    │ 
+ │                                                                                                                    │ 
+ │                                                                                                                    │ 
+ │                                                                                                                    │ 
+ │                                                                                                                    │ 
+ │                                                                                                                    │ 
+ │                                                                                                                    │ 
+ │                                                                                                                    │ 
+ │                                                                                                                    │ 
+ └────────────────────────────────────────────────────────────────────────────────────────────────────────────────────┘ 
+                                                                                                                        
+  space  tick   enter  next   esc  back

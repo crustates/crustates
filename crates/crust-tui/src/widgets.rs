@@ -298,6 +298,25 @@ pub fn qr(text: &str) -> Option<Vec<Line<'static>>> {
     Some(lines)
 }
 
+/// Drops blank lines, last first, until `lines` fit `width`×`height`: on
+/// small screens the content moves together instead of being cut off.
+#[must_use]
+pub fn fit(mut lines: Vec<Line<'static>>, width: u16, height: u16) -> Vec<Line<'static>> {
+    let rows = |lines: &[Line<'_>]| -> usize {
+        lines
+            .iter()
+            .map(|l| l.width().div_ceil(usize::from(width.max(1))).max(1))
+            .sum()
+    };
+    while rows(&lines) > usize::from(height) {
+        let Some(blank) = lines.iter().rposition(|l| l.width() == 0) else {
+            break;
+        };
+        lines.remove(blank);
+    }
+    lines
+}
+
 /// Lays `width`×`height` in the middle of `area`.
 #[must_use]
 pub fn centered(area: Rect, width: u16, height: u16) -> Rect {
