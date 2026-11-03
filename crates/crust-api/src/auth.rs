@@ -233,14 +233,18 @@ fn bearer(headers: &HeaderMap) -> Option<&str> {
     scheme.eq_ignore_ascii_case("bearer").then_some(token)
 }
 
-/// Middleware: every `/v1/` request needs the admin token as a bearer
-/// token. Other paths (`/healthz`, `/docs`) stay open.
+/// Paths anyone may call: the health check and the API reference.
+const OPEN_PATHS: [&str; 3] = ["/healthz", "/docs", "/docs/"];
+
+/// Middleware: every request needs the admin token as a bearer token,
+/// except the [`OPEN_PATHS`]. Fails closed: a new route is protected unless
+/// it is added there.
 pub async fn require_token(
     State(auth): State<Arc<Auth>>,
     mut request: Request,
     next: Next,
 ) -> Response {
-    if !request.uri().path().starts_with("/v1/") {
+    if OPEN_PATHS.contains(&request.uri().path()) {
         return next.run(request).await;
     }
     let client = request

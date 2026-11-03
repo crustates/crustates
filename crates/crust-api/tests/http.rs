@@ -93,6 +93,10 @@ async fn v1_needs_the_admin_token() {
     let (status, _) = api.send("GET", "/v1/nodes", Some(&wrong), "").await;
     assert_eq!(status, StatusCode::UNAUTHORIZED);
 
+    // Unknown paths are closed too, so a 404 tells nothing without the token.
+    let (status, _) = api.send("GET", "/v2/anything", None, "").await;
+    assert_eq!(status, StatusCode::UNAUTHORIZED);
+
     // Typed in lower case without dashes, it still works.
     let typed = api.token.to_lowercase().replace('-', "");
     let (status, _) = api.send("GET", "/v1/nodes", Some(&typed), "").await;

@@ -213,7 +213,13 @@ async fn execute<O: Os>(
         result.error = "this node does not run Molt".into();
         return result;
     };
-    info!(command = command.id, kind = ?std::mem::discriminant(&kind), "running a command");
+    let name = match &kind {
+        command::Kind::MoltUpgrade(_) => "molt upgrade",
+        command::Kind::MoltRollback(_) => "molt rollback",
+        command::Kind::MoltPolicy(_) => "molt policy",
+        command::Kind::MoltEnrollKey(_) => "molt enroll-key",
+    };
+    info!(command = command.id, name, "running a command");
     let outcome = match kind {
         command::Kind::MoltUpgrade(c) => updater.upgrade(c.reboot).await,
         command::Kind::MoltRollback(c) => updater.rollback(c.reboot).await,

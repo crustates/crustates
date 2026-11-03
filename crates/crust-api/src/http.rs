@@ -96,7 +96,7 @@ pub fn openapi() -> utoipa::openapi::OpenApi {
 }
 
 /// The HTTP router: the API plus the Scalar reference at `/docs`. Every
-/// `/v1/` route needs the admin token.
+/// route but `/healthz` and `/docs` needs the admin token.
 pub fn router(state: AppState) -> Router {
     let (router, api) = routes().split_for_parts();
     let auth = state.auth.clone();

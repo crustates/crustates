@@ -4,6 +4,10 @@
 set -euo pipefail
 umask 077
 
+# Normally crust-api.service made the state directory already. If it did not
+# start, make it as it would, or its first start hands everything in it,
+# secrets included, to the crustates user.
+[ -e /var/lib/crustates ] || install -d -m 0750 -o crustates -g crustates /var/lib/crustates
 secrets=/var/lib/crustates/secrets
 install -d -m 0750 -o root -g crustates "$secrets"
 token=$(CRUST_ADMIN_TOKEN_FILE="$secrets/admin-token" /usr/bin/crust-api new-admin-token)
