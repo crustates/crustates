@@ -451,15 +451,24 @@ fn first_boot(snap: &Snapshot, buf: &mut Buffer, area: Rect) {
             Span::styled(text.to_owned(), Role::Text.fg()),
         ])
     };
-    let lines = vec![
+    let mut lines = vec![
         step("1", "From a computer on the same network, log in:"),
         blank(),
         plain(format!("     crust login --api {url}"), Role::Info),
         blank(),
-        step("2", "Enter this admin token when it asks:"),
-        blank(),
-        code(&first.token),
-        blank(),
+    ];
+    // A machine set up before the console keeps its token; only the PIN is new.
+    if first.token.is_empty() {
+        lines.extend([step("2", "Your admin token stays as it was."), blank()]);
+    } else {
+        lines.extend([
+            step("2", "Enter this admin token when it asks:"),
+            blank(),
+            code(&first.token),
+            blank(),
+        ]);
+    }
+    lines.extend([
         step("3", "Keep the recovery PIN for this screen:"),
         blank(),
         code(&pin),
@@ -472,7 +481,7 @@ fn first_boot(snap: &Snapshot, buf: &mut Buffer, area: Rect) {
         Line::from(vec![
             Span::styled("!  ", Role::Focus.fg()),
             Span::styled(
-                "Write both down. They are not shown again after you press enter or the machine reboots.",
+                "Write them down. They are not shown again after you press enter or the machine reboots.",
                 Role::Focus.fg(),
             ),
         ]),
@@ -481,7 +490,7 @@ fn first_boot(snap: &Snapshot, buf: &mut Buffer, area: Rect) {
         service_line("API", snap.api),
         service_line("Agent", snap.agent),
         network_line(snap),
-    ];
+    ]);
     panel(buf, area, "Finish setup", Some(Role::Focus), lines);
 }
 

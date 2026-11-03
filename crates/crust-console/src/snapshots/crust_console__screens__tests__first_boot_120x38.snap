@@ -20,7 +20,7 @@ expression: "render(&app, width, height)"
  │         ▄▀█▄▀▄█▄█ ▄▀ ▀█ ▄▀▀██▀  ▄▄█         │ │                                                                    │ 
  │       ▄█▄▄▄▀▀▀ ▀▄██▀█▄█  ▄ ▀▀▀▀▀  ▀         │ │    Rollback, network changes and reboots here ask for it.          │ 
  │        ▄██▀█▀▄████▀██   █▀ ▀█  █▄▄█         │ │                                                                    │ 
- │       ▀▀▄ █ ▀▄ █▀▄ ▄ ▀  ▄ ▀ ▄█▄   ▀         │ │ !  Write both down. They are not shown again after you press enter │ 
+ │       ▀▀▄ █ ▀▄ █▀▄ ▄ ▀  ▄ ▀ ▄█▄   ▀         │ │ !  Write them down. They are not shown again after you press enter │ 
  │       ▀▀▀ ▀ ▀ █ ▀█ ▀ ▀█ █▀█▀▀▀██▄▀▄         │ │ or the machine reboots.                                            │ 
  │       █▀▀▀▀▀█ ▀▀▀▀ ▀█▄█▀▀██ ▀ █  ▄▀         │ │                                                                    │ 
  │       █ ███ █  ▀██▀██  █▀▀█▀▀▀█  █▀         │ │ ────────────────────────────────────────────────────────────       │ 

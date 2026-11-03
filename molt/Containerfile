@@ -98,10 +98,14 @@ RUN depmod -a "$(ls /usr/lib/modules)"
 COPY molt/rootfs/ /
 # Crustates decides when Molt updates (the agent), not bootc's own timer.
 # The console takes tty1 and tty2; no login prompts anywhere (ADR 0018).
+# Fedora runs kmscon on its terminals (autovt@ links to kmsconvt@); the
+# console needs the kernel's own terminal, for its font and palette.
 RUN systemctl enable crust-api.service crust-agent.service crust-firstboot.service nftables.service \
         greenboot-healthcheck.service greenboot-set-rollback-trigger.service crust-boot-trial.service \
         crust-console.service crust-console-logs.service \
-    && systemctl mask bootc-fetch-apply-updates.timer getty@.service autovt@.service serial-getty@.service
+    && rm -f /etc/systemd/system/autovt@.service \
+    && systemctl mask bootc-fetch-apply-updates.timer getty@.service autovt@.service kmsconvt@.service \
+        serial-getty@.service
 # Late, so a new version reuses every layer above.
 ARG VERSION
 LABEL org.opencontainers.image.version=${VERSION}
