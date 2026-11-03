@@ -24,6 +24,10 @@ const FIRST_BOOT: &str = "/run/crustates/firstboot.json";
 const HEALTH: &str = "/run/crustates/health.json";
 /// The node name the agent registered with.
 const NODE_NAME: &str = "/var/lib/crust-agent/node-name";
+/// How often the slow facts are read again: the node and its Molt status
+/// from the API, the pools, `NetworkManager`'s view. The rest is read every
+/// few seconds.
+const SLOW_EVERY: Duration = Duration::from_secs(30);
 /// How long `NetworkManager` waits for a confirmation.
 const CHECKPOINT_SECS: u32 = 60;
 /// Checkpoint flags: destroy older checkpoints, delete connections made
@@ -36,6 +40,16 @@ pub struct Linux {
     api: Api,
     api_port: u16,
     admin_token_file: PathBuf,
+    slow: tokio::sync::Mutex<Slow>,
+}
+
+/// Facts that are expensive to read, and when they were read.
+#[derive(Debug, Default)]
+struct Slow {
+    at: Option<Instant>,
+    nodes: Vec<crust_types::Node>,
+    pools: Vec<(String, bool)>,
+    nm: NmFacts,
 }
 
 impl Linux {
@@ -55,6 +69,7 @@ impl Linux {
             api: Api::new(socket),
             api_port: port,
             admin_token_file: token,
+            slow: tokio::sync::Mutex::default(),
         }
     }
 }
@@ -121,7 +136,54 @@ async fn nm_values(args: &[&str]) -> Vec<String> {
 }
 
 #[allow(clippy::too_many_lines, reason = "one fact after the other")]
-async fn network() -> Network {
+/// What `NetworkManager` says about the management connection: slow to
+/// ask (`nmcli`), so it is cached.
+#[derive(Clone, Debug, Default)]
+struct NmFacts {
+    method: Method,
+    dns: Vec<String>,
+    search: Vec<String>,
+}
+
+/// The device of the default route, or the first wired port.
+async fn default_device() -> String {
+    let route = json(
+        &run("ip", &["-j", "-4", "route", "show", "default"])
+            .await
+            .unwrap_or_default(),
+    );
+    route[0]["dev"]
+        .as_str()
+        .map(str::to_owned)
+        .unwrap_or_else(|| {
+            std::fs::read_dir("/sys/class/net")
+                .into_iter()
+                .flatten()
+                .filter_map(Result::ok)
+                .find(|e| e.path().join("device").exists() && !e.path().join("wireless").exists())
+                .map(|e| e.file_name().to_string_lossy().into_owned())
+                .unwrap_or_default()
+        })
+}
+
+async fn nm_facts(device: &str) -> NmFacts {
+    let connection = nm_values(&["-t", "-g", "GENERAL.CONNECTION", "device", "show", device]).await;
+    let method = match connection.first() {
+        Some(c) => nm_values(&["-t", "-g", "ipv4.method", "connection", "show", c]).await,
+        None => Vec::new(),
+    };
+    NmFacts {
+        method: if method.first().is_some_and(|m| m == "manual") {
+            Method::Static
+        } else {
+            Method::Dhcp
+        },
+        dns: nm_values(&["-t", "-g", "IP4.DNS", "device", "show", device]).await,
+        search: nm_values(&["-t", "-g", "IP4.DOMAIN", "device", "show", device]).await,
+    }
+}
+
+async fn network(nm: &NmFacts) -> Network {
     let mut interfaces = Vec::new();
     let mut names: Vec<String> = std::fs::read_dir("/sys/class/net")
         .map(|d| {
@@ -201,27 +263,13 @@ async fn network() -> Network {
             .or_else(|| interfaces.iter().find(|i| i.link != Link::Ignored))
             .map(|i| i.name.clone())
     });
-    let device = default_dev
-        .clone()
-        .or_else(|| management.clone())
-        .unwrap_or_default();
-    let connection =
-        nm_values(&["-t", "-g", "GENERAL.CONNECTION", "device", "show", &device]).await;
-    let method = match connection.first() {
-        Some(c) => nm_values(&["-t", "-g", "ipv4.method", "connection", "show", c]).await,
-        None => Vec::new(),
-    };
     Network {
         interfaces,
         management,
-        method: if method.first().is_some_and(|m| m == "manual") {
-            Method::Static
-        } else {
-            Method::Dhcp
-        },
+        method: nm.method,
         gateway,
-        dns: nm_values(&["-t", "-g", "IP4.DNS", "device", "show", &device]).await,
-        search: nm_values(&["-t", "-g", "IP4.DOMAIN", "device", "show", &device]).await,
+        dns: nm.dns.clone(),
+        search: nm.search.clone(),
         vlan,
     }
 }
@@ -249,11 +297,24 @@ impl System for Linux {
     async fn snapshot(&self) -> Snapshot {
         let hostname = read("/proc/sys/kernel/hostname").unwrap_or_default();
         let api_up = self.api.healthy().await;
-        let nodes = if api_up {
-            self.api.nodes().await.unwrap_or_default()
-        } else {
-            Vec::new()
-        };
+        let mut slow = self.slow.lock().await;
+        if slow.at.is_none_or(|at| at.elapsed() > SLOW_EVERY) {
+            slow.nodes = if api_up {
+                self.api.nodes().await.unwrap_or_default()
+            } else {
+                Vec::new()
+            };
+            slow.pools = run("zpool", &["list", "-H", "-o", "name,health"])
+                .await
+                .unwrap_or_default()
+                .lines()
+                .filter_map(|l| l.split_once('\t'))
+                .map(|(name, health)| (name.to_owned(), health == "ONLINE"))
+                .collect();
+            slow.nm = nm_facts(&default_device().await).await;
+            slow.at = Some(Instant::now());
+        }
+        let nodes = &slow.nodes;
         let node = read(NODE_NAME)
             .or_else(|| (nodes.len() == 1).then(|| nodes[0].metadata.name.clone()))
             .unwrap_or_else(|| hostname.clone());
@@ -261,13 +322,9 @@ impl System for Linux {
             .iter()
             .find(|n| n.metadata.name == node)
             .and_then(|n| n.status.molt.clone());
-        let pools = run("zpool", &["list", "-H", "-o", "name,health"])
-            .await
-            .unwrap_or_default()
-            .lines()
-            .filter_map(|l| l.split_once('\t'))
-            .map(|(name, health)| (name.to_owned(), health == "ONLINE"))
-            .collect();
+        let pools = slow.pools.clone();
+        let network = network(&slow.nm).await;
+        drop(slow);
         Snapshot {
             now: jiff::Zoned::now().strftime("%Y-%m-%d %H:%M").to_string(),
             version: version(),
@@ -281,7 +338,7 @@ impl System for Linux {
             },
             agent: service("crust-agent").await,
             first_boot: read(FIRST_BOOT).and_then(|t| serde_json::from_str::<FirstBoot>(&t).ok()),
-            network: network().await,
+            network,
             molt,
             pools,
             health: read(HEALTH).and_then(|t| serde_json::from_str::<Health>(&t).ok()),

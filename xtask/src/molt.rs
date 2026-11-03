@@ -14,6 +14,7 @@
 //!   IMAGE, by default the built `molt:dev`, into `target/molt/images/dist`
 //!
 //! `MOLT_ACCEL=tcg` boots without KVM (slow); see `molt/tools/boot-vm`.
+//! `MOLT_TEST_SECS` lengthens how long a test waits for each selftest.
 
 use std::path::{Path, PathBuf};
 use std::process::Command;
@@ -37,6 +38,14 @@ const TOOLS_IMAGE: &str = "localhost/crustates/molt-tools:dev";
 const API_PORT: u16 = 18080;
 /// How long `molt test` waits for the selftest result.
 const TEST_TIMEOUT: Duration = Duration::from_mins(15);
+/// [`TEST_TIMEOUT`], or `MOLT_TEST_SECS`.
+fn test_timeout() -> Duration {
+    std::env::var("MOLT_TEST_SECS")
+        .ok()
+        .and_then(|s| s.parse().ok())
+        .map_or(TEST_TIMEOUT, Duration::from_secs)
+}
+
 /// How long the serial console may stay silent before `molt test` calls the
 /// VM stalled. Hosted runners occasionally freeze a nested VM in early boot.
 const STALL_TIMEOUT: Duration = Duration::from_mins(5);
@@ -386,7 +395,7 @@ impl Serial<'_> {
     fn wait_for_pass(&mut self, version: &str, tolerate_fail: bool) -> anyhow::Result<String> {
         let start = Instant::now();
         let (mut seen, mut last_output) = (0, Instant::now());
-        while start.elapsed() < TEST_TIMEOUT {
+        while start.elapsed() < test_timeout() {
             let serial = std::fs::read(self.log).unwrap_or_default();
             let new = serial.get(self.from..).unwrap_or_default();
             match selftest_result(new, version) {
@@ -411,7 +420,7 @@ impl Serial<'_> {
         }
         bail!(
             "no selftest PASS for {version} within {} s",
-            TEST_TIMEOUT.as_secs()
+            test_timeout().as_secs()
         )
     }
 }
