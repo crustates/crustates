@@ -28,7 +28,9 @@ use crate::molt::{Os, Paths, Updater};
 pub struct Config {
     /// The control plane's agent endpoint.
     pub api: String,
-    /// The node name; defaults to the host name made into a DNS label.
+    /// The node name; defaults to the name this machine first registered
+    /// with (`node-name` in `state_dir`), else the host name made into a
+    /// DNS label.
     pub name: Option<String>,
     /// Milliseconds between reports.
     pub report_interval_ms: u64,
@@ -117,7 +119,7 @@ pub async fn run<O: Os>(
     );
     // No timeout: the command stream stays open.
     let commands = NodeServiceClient::new(endpoint.connect_lazy());
-    let mut report = facts(config.name.clone())?;
+    let mut report = facts(&config)?;
     let updater = os.map(|os| Arc::new(Updater::new(os, config.molt_paths())));
     info!(
         node = report.name,
@@ -251,7 +253,7 @@ async fn execute<O: Os>(
 }
 
 /// This machine's facts. They only change with a reboot, so they are read once.
-fn facts(name: Option<String>) -> Result<ReportRequest, sysinfo::Error> {
+fn facts(config: &Config) -> Result<ReportRequest, sysinfo::Error> {
     let system = System::new_with_specifics(
         RefreshKind::nothing()
             .with_cpu(CpuRefreshKind::nothing())
@@ -259,7 +261,7 @@ fn facts(name: Option<String>) -> Result<ReportRequest, sysinfo::Error> {
     )?;
     let hostname = System::host_name().unwrap_or_default();
     Ok(ReportRequest {
-        name: name.unwrap_or_else(|| node_name(&hostname)),
+        name: identity(config, &hostname),
         hostname,
         arch: std::env::consts::ARCH.to_owned(),
         kernel: System::kernel_version().unwrap_or_default(),
@@ -267,6 +269,28 @@ fn facts(name: Option<String>) -> Result<ReportRequest, sysinfo::Error> {
         memory_bytes: system.total_memory(),
         molt: None,
     })
+}
+
+/// The node's name: the configured one, else the one this machine
+/// registered with first, so renaming the host keeps the node. The local
+/// console reads the same file.
+fn identity(config: &Config, hostname: &str) -> String {
+    if let Some(name) = &config.name {
+        return name.clone();
+    }
+    let file = config.state_dir.join("node-name");
+    if let Ok(saved) = std::fs::read_to_string(&file)
+        && !saved.trim().is_empty()
+    {
+        return saved.trim().to_owned();
+    }
+    let name = node_name(hostname);
+    let saved = std::fs::create_dir_all(&config.state_dir)
+        .and_then(|()| std::fs::write(&file, format!("{name}\n")));
+    if let Err(e) = saved {
+        warn!(file = %file.display(), error = %e, "cannot remember the node name; it follows the host name");
+    }
+    name
 }
 
 /// Turns a host name into a node name: the first label, lower case, with
@@ -301,6 +325,22 @@ mod tests {
     use super::*;
 
     #[test]
+    fn the_first_name_stays_when_the_host_is_renamed() {
+        let dir = tempfile::tempdir().unwrap();
+        let config = Config {
+            state_dir: dir.path().join("state"),
+            ..Config::default()
+        };
+        assert_eq!(identity(&config, "Node-1.home.arpa"), "node-1");
+        assert_eq!(identity(&config, "renamed"), "node-1");
+        let named = Config {
+            name: Some("set".into()),
+            ..config
+        };
+        assert_eq!(identity(&named, "renamed"), "set");
+    }
+
+    #[test]
     fn host_names_become_valid_node_names() {
         for (host, want) in [
             ("Miguels-MacBook-Pro.local", "miguels-macbook-pro"),
@@ -320,7 +360,11 @@ mod tests {
 
     #[test]
     fn facts_describe_this_machine() {
-        let report = facts(Some("test".into())).unwrap();
+        let config = Config {
+            name: Some("test".into()),
+            ..Config::default()
+        };
+        let report = facts(&config).unwrap();
         assert_eq!(report.name, "test");
         assert!(report.cpus > 0);
         assert!(report.memory_bytes > 0);
