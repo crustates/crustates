@@ -1,8 +1,5 @@
 # crust molt enroll-key
 
-> **Status:** the `crust molt enroll-key` command does not exist yet. Until it
-> does, follow the manual steps below.
-
 Molt ships ZFS, and later other drivers, as kernel modules built outside the
 kernel. They are signed with the **Crustates module-signing key**. With Secure
 Boot on, the kernel only loads modules signed by a key the machine trusts, so
@@ -13,54 +10,33 @@ Without Secure Boot you don't need this: the modules load anyway.
 ## Before you start
 
 - You need the machine's own screen and keyboard: enrolment finishes in a
-  firmware screen during boot. Molt has no SSH.
+  firmware screen during boot.
+- You need `crust` logged in to the machine (see [Install](../install.md)).
 - The certificate is in the image at
   `/usr/share/crustates/keys/crustates-module-signing.der`.
-- Check that it is the release certificate. Its SHA-256 fingerprint must match
-  the one in the release notes:
-
-  ```sh
-  openssl x509 -inform DER -noout -subject -fingerprint -sha256 \
-    -in /usr/share/crustates/keys/crustates-module-signing.der
-  ```
-
-  Local and pull request builds are signed with a throwaway key whose subject
-  says `throwaway, not for release`. Never enrol that one.
 
 ## Steps
 
-1. Check that Secure Boot is on:
+1. Queue the key from your computer:
 
-   ```sh
-   mokutil --sb-state
-   ```
+    ```sh
+    crust molt enroll-key
+    ```
 
-   If it says `SecureBoot disabled`, stop here: nothing to enrol.
+    The machine checks that Secure Boot is on and that the key is not enrolled
+    yet, then prints the certificate's SHA-256 fingerprint and a one-time
+    password. Compare the fingerprint with the one in the release notes.
 
-2. Queue the certificate for enrolment. `mokutil` asks for a one-time password
-   that you type again in step 3:
+    Images from local and pull request builds are signed with a throwaway key
+    whose subject says `throwaway, not for release`; the command refuses to
+    enrol it.
 
-   ```sh
-   mokutil --import /usr/share/crustates/keys/crustates-module-signing.der
-   ```
+2. Reboot the machine. Before Molt starts, the blue **MOK management** screen
+   appears. Choose **Enroll MOK**, then **Continue**, then **Yes**, type the
+   one-time password, and choose **Reboot**.
 
-3. Reboot. Before Molt starts, the blue **MOK management** screen appears.
-   Choose **Enroll MOK**, then **Continue**, then **Yes**, type the password
-   from step 2, and choose **Reboot**.
+3. After the reboot, `crust molt enroll-key` says the key is already
+   enrolled, and ZFS pools work.
 
-4. After the reboot, check:
-
-   ```sh
-   mokutil --test-key /usr/share/crustates/keys/crustates-module-signing.der
-   modprobe zfs
-   ```
-
-   `mokutil` reports the key as already enrolled, and `modprobe zfs` loads
-   without an error.
-
-## What the command will do
-
-`crust molt enroll-key` will check the Secure Boot state and the certificate
-fingerprint, queue the certificate (step 2) through the API, and tell you
-what to do on the next boot. Steps 3 and 4 stay manual, because only someone
-at the machine may approve a new boot key.
+Only someone at the machine can finish step 2: a new boot key always needs
+physical presence.

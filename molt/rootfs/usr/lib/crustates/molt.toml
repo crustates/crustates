@@ -1,0 +1,11 @@
+# Molt update settings (ADR 0016). Override them in /etc/crustates/molt.toml,
+# for example with `crust molt policy set`.
+
+# The image repository and the channel (tag) this machine follows.
+repository = "ghcr.io/crustates/molt"
+channel = "beta"
+# auto: stage new images when they appear and reboot into them in the window.
+# manual: only report them; `crust molt upgrade` stages one.
+policy = "auto"
+# When auto may reboot, HH:MM-HH:MM in local time.
+window = "03:00-05:00"

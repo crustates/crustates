@@ -5,7 +5,7 @@ use std::path::Path;
 use std::sync::Arc;
 use std::time::Duration;
 
-use crust_types::{Kind, Metadata, Object, Resource};
+use crust_types::{AuditEntry, Kind, Metadata, Object, Resource};
 use futures::{Stream, StreamExt, future};
 use jiff::Timestamp;
 use sqlx::SqlitePool;
@@ -219,5 +219,39 @@ impl Store for SqliteStore {
                     })
                 }))
             })
+    }
+
+    async fn audit(&self, entry: AuditEntry) -> Result<(), Error> {
+        sqlx::query(
+            "INSERT INTO audit (time, principal, action, target, outcome) VALUES (?, ?, ?, ?, ?)",
+        )
+        .bind(entry.time.to_string())
+        .bind(&entry.principal)
+        .bind(&entry.action)
+        .bind(&entry.target)
+        .bind(&entry.outcome)
+        .execute(&self.pool)
+        .await?;
+        Ok(())
+    }
+
+    async fn audit_log(&self, limit: u32) -> Result<Vec<AuditEntry>, Error> {
+        let rows: Vec<(String, String, String, String, String)> = sqlx::query_as(
+            "SELECT time, principal, action, target, outcome FROM audit ORDER BY id DESC LIMIT ?",
+        )
+        .bind(limit)
+        .fetch_all(&self.pool)
+        .await?;
+        rows.into_iter()
+            .map(|(time, principal, action, target, outcome)| {
+                Ok(AuditEntry {
+                    time: time.parse().map_err(|_| Error::AuditTime(time))?,
+                    principal,
+                    action,
+                    target,
+                    outcome,
+                })
+            })
+            .collect()
     }
 }

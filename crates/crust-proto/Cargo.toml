@@ -11,6 +11,8 @@ publish.workspace = true
 workspace = true
 
 [dependencies]
+crust-types.workspace = true
+jiff.workspace = true
 prost.workspace = true
 tonic.workspace = true
 tonic-prost.workspace = true

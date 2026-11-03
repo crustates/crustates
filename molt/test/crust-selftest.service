@@ -3,7 +3,7 @@
 [Unit]
 Description=Crustates image selftest
 Wants=crust-api.service crust-agent.service
-After=crust-api.service crust-agent.service
+After=crust-api.service crust-agent.service crust-firstboot.service greenboot-healthcheck.service
 
 [Service]
 Type=oneshot

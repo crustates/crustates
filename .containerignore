@@ -2,3 +2,4 @@
 target/
 .git/
 **/*.db*
+**/crust-admin-token*

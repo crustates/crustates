@@ -1,0 +1,21 @@
+# Gives a staged Molt image one trial boot (ADR 0016). greenboot arms its boot
+# counter only after a failed health check, so a new kernel that panics before
+# userspace would boot again and again. This arms the counter when the image
+# is staged: if the new image does not reach a passing health check, the
+# next boot falls back to the previous image. Runs at shutdown, next to
+# greenboot's own trigger, before ostree deploys the staged image.
+[Unit]
+Description=Crustates: one trial boot for a staged Molt image
+DefaultDependencies=no
+After=ostree-finalize-staged.service greenboot-set-rollback-trigger.service
+RequiresMountsFor=/boot
+ConditionPathExists=/run/ostree-booted
+
+[Service]
+Type=oneshot
+RemainAfterExit=yes
+ExecStop=/usr/libexec/crustates/crust-boot-trial
+PrivateMounts=yes
+
+[Install]
+RequiredBy=ostree-finalize-staged.service

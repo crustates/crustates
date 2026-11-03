@@ -194,6 +194,9 @@ pub struct NodeStatus {
     /// Conditions, including [`READY`].
     #[serde(default)]
     pub conditions: Vec<Condition>,
+    /// The node's OS image and its updates, if the node runs Molt.
+    #[serde(default)]
+    pub molt: Option<MoltStatus>,
 }
 
 impl NodeStatus {
@@ -202,6 +205,153 @@ impl NodeStatus {
     pub fn ready(&self) -> ConditionStatus {
         condition(&self.conditions, READY).map_or(ConditionStatus::Unknown, |c| c.status)
     }
+}
+
+/// A node's Molt OS image: what runs, what comes next, and how it updates.
+#[derive(Clone, Debug, Default, PartialEq, Serialize, Deserialize, ToSchema)]
+pub struct MoltStatus {
+    /// The image the node runs now.
+    pub booted: Option<MoltImage>,
+    /// An image downloaded and ready; it runs after the next reboot.
+    pub staged: Option<MoltImage>,
+    /// The image that ran before, kept to roll back to.
+    pub rollback: Option<MoltImage>,
+    /// Whether the rollback image boots next instead of the booted one.
+    #[serde(default)]
+    pub rollback_queued: bool,
+    /// A newer image on the channel that is not staged yet.
+    pub available: Option<MoltImage>,
+    /// The image repository, for example `ghcr.io/crustates/molt`.
+    pub repository: String,
+    /// The channel the node follows: the tag it checks for updates.
+    pub channel: String,
+    /// When updates are applied.
+    pub policy: UpdatePolicy,
+    /// When automatic updates may reboot the node, in local time.
+    pub window: String,
+    /// When the node last checked its channel.
+    pub last_check: Option<Timestamp>,
+    /// Why the last check or update failed; empty if it worked.
+    #[serde(default)]
+    pub last_error: String,
+    /// Image digests that failed their health check here; they are never
+    /// staged again.
+    #[serde(default)]
+    pub bad_digests: Vec<String>,
+    /// Whether a new image that fails to boot or fails its health check is
+    /// rolled back by itself. Needs the boot counter in the boot loader.
+    pub automatic_rollback: bool,
+}
+
+/// One Molt image on a node.
+#[derive(Clone, Debug, Default, PartialEq, Eq, Serialize, Deserialize, ToSchema)]
+pub struct MoltImage {
+    /// The image reference it was pulled from.
+    pub image: String,
+    /// The image's manifest digest, `sha256:…`.
+    pub digest: String,
+    /// The Molt version, for example `0.1.0`; empty if the image has none.
+    pub version: String,
+    /// Whether this node checked the image's signature before staging it.
+    pub verified: bool,
+}
+
+/// When a node applies Molt updates.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Serialize, Deserialize, ToSchema)]
+#[serde(rename_all = "lowercase")]
+pub enum UpdatePolicy {
+    /// Stage new images when they appear and reboot in the update window.
+    #[default]
+    Auto,
+    /// Only report new images; an admin stages them.
+    Manual,
+}
+
+impl std::fmt::Display for UpdatePolicy {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.write_str(match self {
+            UpdatePolicy::Auto => "auto",
+            UpdatePolicy::Manual => "manual",
+        })
+    }
+}
+
+impl std::str::FromStr for UpdatePolicy {
+    type Err = String;
+
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        match s {
+            "auto" => Ok(UpdatePolicy::Auto),
+            "manual" => Ok(UpdatePolicy::Manual),
+            other => Err(format!("policy {other:?} is neither auto nor manual")),
+        }
+    }
+}
+
+/// A daily time window in local time, written `HH:MM-HH:MM`. It may wrap
+/// past midnight, as in `23:00-01:00`.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub struct Window {
+    /// Start, in minutes after midnight.
+    pub start: u16,
+    /// End, in minutes after midnight; the window ends just before it.
+    pub end: u16,
+}
+
+impl Window {
+    /// Whether `minute` (minutes after midnight) falls inside the window.
+    #[must_use]
+    pub fn contains(&self, minute: u16) -> bool {
+        if self.start <= self.end {
+            (self.start..self.end).contains(&minute)
+        } else {
+            minute >= self.start || minute < self.end
+        }
+    }
+}
+
+impl std::str::FromStr for Window {
+    type Err = String;
+
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        let bad = || format!("window {s:?} is not HH:MM-HH:MM, for example 03:00-05:00");
+        let minutes = |t: &str| -> Option<u16> {
+            let (h, m) = t.split_once(':')?;
+            let (h, m): (u16, u16) = (h.parse().ok()?, m.parse().ok()?);
+            (h < 24 && m < 60 && t.len() == 5).then_some(h * 60 + m)
+        };
+        let (start, end) = s.split_once('-').ok_or_else(bad)?;
+        let (start, end) = (
+            minutes(start).ok_or_else(bad)?,
+            minutes(end).ok_or_else(bad)?,
+        );
+        if start == end {
+            return Err(format!("window {s:?} is empty"));
+        }
+        Ok(Window { start, end })
+    }
+}
+
+impl std::fmt::Display for Window {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        let (s, e) = (self.start, self.end);
+        write!(f, "{:02}:{:02}-{:02}:{:02}", s / 60, s % 60, e / 60, e % 60)
+    }
+}
+
+/// One entry in the audit log: who changed what, and whether it worked.
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize, ToSchema)]
+pub struct AuditEntry {
+    /// When it happened.
+    pub time: Timestamp,
+    /// Who did it, for example `admin token`.
+    pub principal: String,
+    /// What was done, for example `molt.upgrade`.
+    pub action: String,
+    /// What it was done to, for example `node/attic`.
+    pub target: String,
+    /// `ok`, or why it failed.
+    pub outcome: String,
 }
 
 #[cfg(test)]
@@ -234,5 +384,33 @@ mod tests {
     #[test]
     fn node_ready_defaults_to_unknown() {
         assert_eq!(NodeStatus::default().ready(), ConditionStatus::Unknown);
+    }
+
+    #[test]
+    fn windows_parse_print_and_wrap_midnight() {
+        let night: Window = "03:00-05:00".parse().unwrap();
+        assert_eq!(night.to_string(), "03:00-05:00");
+        assert!(night.contains(3 * 60));
+        assert!(night.contains(5 * 60 - 1));
+        assert!(!night.contains(5 * 60));
+        let wrap: Window = "23:30-01:00".parse().unwrap();
+        assert!(wrap.contains(23 * 60 + 45) && wrap.contains(30) && !wrap.contains(60));
+        for bad in [
+            "",
+            "3:00-05:00",
+            "03:00-05",
+            "24:00-01:00",
+            "03:60-04:00",
+            "03:00-03:00",
+        ] {
+            assert!(bad.parse::<Window>().is_err(), "{bad:?} should be rejected");
+        }
+    }
+
+    #[test]
+    fn nodes_stored_before_molt_status_existed_still_decode() {
+        let old = r#"{"hostname":"a","arch":"x86_64","kernel":"7","cpus":1,"memory_bytes":1,"last_heartbeat":null}"#;
+        let status: NodeStatus = serde_json::from_str(old).unwrap();
+        assert_eq!(status.molt, None);
     }
 }

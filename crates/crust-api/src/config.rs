@@ -19,6 +19,9 @@ pub struct Config {
     pub database: PathBuf,
     /// Seconds without a report before a node turns `NotReady`.
     pub heartbeat_timeout_secs: u64,
+    /// The argon2id hash of the admin token (ADR 0015). `crust-api
+    /// new-admin-token` writes it.
+    pub admin_token_file: PathBuf,
 }
 
 impl Default for Config {
@@ -28,6 +31,7 @@ impl Default for Config {
             agent_listen: SocketAddr::from(([127, 0, 0, 1], 8081)),
             database: PathBuf::from("crust.db"),
             heartbeat_timeout_secs: 15,
+            admin_token_file: PathBuf::from("crust-admin-token"),
         }
     }
 }

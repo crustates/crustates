@@ -19,3 +19,5 @@ node_modules/
 
 # local control plane database (`cargo run -p crust-api`)
 /crust.db*
+# local admin token hash (`cargo run -p crust-api -- new-admin-token`)
+/crust-admin-token*

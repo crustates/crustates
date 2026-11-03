@@ -73,15 +73,21 @@ this.
 - `cargo run -p crust-api`: the control plane on `127.0.0.1:8080`, API
   reference at `/docs`, agents on `127.0.0.1:8081`, state in `./crust.db`.
   Settings: `crust-api.toml` or `CRUST_*` variables (`crates/crust-api/src/config.rs`).
+  `/v1/` needs the admin token (ADR 0015):
+  `cargo run -p crust-api -- new-admin-token` prints one and writes its hash
+  to `./crust-admin-token`.
 - `cargo run -p crust-agent`: registers this machine as a node
-  (`CRUST_AGENT_*` variables).
-- `cargo run -p crust-cli -- node list`: the CLI against the local API.
+  (`CRUST_AGENT_*` variables). Molt updates only run on a bootc machine.
+- `cargo run -p crust-cli -- login`, then `-- node list`: the CLI against the
+  local API.
 - `cargo xtask openapi`: regenerates `sdk/openapi.json`; run it after changing
   the API and commit the result.
 - `cargo xtask molt build | run | test`: builds the Molt image with podman,
   boots it in QEMU (API on `localhost:18080`), or boots the test image and
-  waits for `CRUST-SELFTEST: PASS`. Needs podman with KVM; on macOS a rootful
-  podman machine with 8 GB of memory.
+  waits for `CRUST-SELFTEST: PASS`. `test --upgrade` also upgrades the VM from
+  a local registry and checks that greenboot rolls back a bad image (ADR
+  0016). Needs podman with KVM; on macOS a rootful podman machine with 8 GB of
+  memory.
 - Out-of-tree kernel modules (ZFS so far) each get a stage in
   `molt/Containerfile`; see `molt/kmods/README.md`. Builds sign them with a
   throwaway key unless `MOLT_SIGNING_KEY` and `MOLT_SIGNING_CERT` are set.

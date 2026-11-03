@@ -10,7 +10,7 @@ mod sqlite;
 
 use std::future::Future;
 
-use crust_types::{Kind, Object};
+use crust_types::{AuditEntry, Kind, Object};
 use futures::Stream;
 
 pub use sqlite::SqliteStore;
@@ -55,6 +55,9 @@ pub enum Error {
     /// The database failed.
     #[error(transparent)]
     Database(#[from] sqlx::Error),
+    /// A stored audit entry has an invalid time.
+    #[error("stored audit time {0:?} is invalid")]
+    AuditTime(String),
     /// A schema migration failed.
     #[error(transparent)]
     Migrate(#[from] sqlx::migrate::MigrateError),
@@ -109,4 +112,10 @@ pub trait Store: Clone + Send + Sync + 'static {
     /// The stream ends if the watcher falls too far behind. Callers then
     /// list again and start a new watch.
     fn watch<K: Kind>(&self) -> impl Stream<Item = Event<K>> + Send + use<Self, K>;
+
+    /// Appends `entry` to the audit log.
+    fn audit(&self, entry: AuditEntry) -> impl Future<Output = Result<(), Error>> + Send;
+
+    /// The newest `limit` audit entries, newest first.
+    fn audit_log(&self, limit: u32) -> impl Future<Output = Result<Vec<AuditEntry>, Error>> + Send;
 }

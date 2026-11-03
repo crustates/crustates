@@ -13,3 +13,4 @@ workspace = true
 [dependencies]
 anyhow.workspace = true
 crust-api.workspace = true
+serde_json.workspace = true

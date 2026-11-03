@@ -11,9 +11,13 @@ EnvironmentFile=/usr/lib/crustates/crust-api.env
 EnvironmentFile=-/etc/crustates/crust-api.env
 ExecStart=/usr/bin/crust-api
 Restart=on-failure
-DynamicUser=yes
+# A fixed user (sysusers.d/crustates.conf), not DynamicUser=: its group reads
+# the admin token hash in /var/lib/crustates/secrets, which only root writes.
+User=crustates
+Group=crustates
 # The SQLite database lives in /var/lib/crustates.
 StateDirectory=crustates
+StateDirectoryMode=0750
 UMask=0077
 ProtectSystem=strict
 ProtectHome=yes

@@ -1,0 +1,18 @@
+# Makes the admin token on the machine's first boot and shows it on the
+# screen until the next reboot (ADR 0015).
+[Unit]
+Description=Crustates admin token
+Documentation=https://github.com/crustates/crustates/blob/development/docs/install.md
+ConditionPathExists=!/var/lib/crustates/secrets/admin-token
+# After the API: starting it creates /var/lib/crustates for the crustates user
+# (or moves it there from an install that used DynamicUser=). Created first,
+# the directory would be handed to that user with everything in it.
+After=crust-api.service systemd-sysusers.service
+
+[Service]
+Type=oneshot
+RemainAfterExit=yes
+ExecStart=/usr/libexec/crustates/crust-firstboot
+
+[Install]
+WantedBy=multi-user.target
