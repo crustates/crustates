@@ -75,6 +75,8 @@ jobs:
             sudo tee /etc/udev/rules.d/99-kvm4all.rules
           sudo udevadm control --reload-rules
           sudo udevadm trigger --name-match=kvm
+          # trigger only queues the event; wait until the new mode is applied.
+          sudo udevadm settle
           if [ ! -w /dev/kvm ]; then
             echo "::error::/dev/kvm is not usable on this runner; the boot test needs KVM"
             exit 1
