@@ -90,7 +90,9 @@ fn main() -> anyhow::Result<()> {
 fn set_up_vt() -> Glyphs {
     use std::io::Write;
     // Kernel messages go to tty12 instead of over the console; the journal
-    // and the serial port still have them.
+    // and the serial port still have them. The kernel redirects only to an
+    // allocated terminal, and opening it allocates it.
+    let _ = std::fs::OpenOptions::new().write(true).open("/dev/tty12");
     let _ = std::process::Command::new("setterm")
         .args(["--msgredirect", "12"])
         .status();
@@ -180,11 +182,14 @@ async fn run_console<S: System>(
     };
     let mut ticks = tokio::time::interval(Duration::from_secs(1));
     let mut repainted = Instant::now();
+    let mut view = (app.screen, app.main(), app.modal.is_some());
     loop {
-        // Anything else that writes to the terminal is painted over now and then.
-        if vt && repainted.elapsed() > Duration::from_secs(30) {
+        // Anything else that writes to the terminal is painted over when the
+        // view changes, and now and then.
+        let now_view = (app.screen, app.main(), app.modal.is_some());
+        if vt && (now_view != view || repainted.elapsed() > Duration::from_secs(30)) {
             terminal.clear()?;
-            repainted = Instant::now();
+            (view, repainted) = (now_view, Instant::now());
         }
         terminal.draw(|frame| {
             let buf = frame.buffer_mut();
