@@ -105,6 +105,11 @@ for unit in crust-console crust-console-logs; do
     retry 30 systemctl is-active --quiet "$unit" || fail "$unit is not running"
 done
 [ "$(systemctl is-enabled getty@tty1.service 2>&1)" = masked ] || fail "getty@ is not masked"
+# For the screenshots: the console's size and what it logged.
+echo "<6>crust-selftest: tty1 is $(stty -F /dev/tty1 size 2>&1) (rows columns)" >/dev/kmsg
+journalctl -b -u crust-console --no-pager -o cat | tail -n 5 | while read -r line; do
+    echo "<6>crust-console: $line" >/dev/kmsg
+done
 socket=/run/crustates/api.sock
 [ "$(stat -c '%U:%G %a' "$socket")" = "crustates:crustates 660" ] ||
     fail "$socket is $(stat -c '%U:%G %a' "$socket" 2>&1), want crustates:crustates 660"

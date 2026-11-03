@@ -36,7 +36,8 @@ case "$(uname -m)" in
     aarch64)
         qemu=qemu-system-aarch64 machine=virt
         code=/usr/share/edk2/aarch64/QEMU_EFI-pflash.raw vars=/usr/share/edk2/aarch64/vars-template-pflash.raw
-        display=(-device virtio-gpu-pci)
+        # virt has no keyboard of its own: screenshots send keys to it.
+        display=(-device virtio-gpu-pci -device virtio-keyboard-pci)
         ;;
 esac
 cp "$vars" /tmp/vars.fd
@@ -51,7 +52,7 @@ args=(
     "${display[@]}"
 )
 if [ -n "$log" ]; then
-    args+=(-display none -serial "file:$log" -monitor tcp:127.0.0.1:4444,server=on,wait=off)
+    args+=(-display none -serial "file:$log" -monitor "tcp:127.0.0.1:4444,server=on,wait=off")
 else
     args+=(-nographic)
 fi
