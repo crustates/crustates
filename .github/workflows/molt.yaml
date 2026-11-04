@@ -74,6 +74,15 @@ jobs:
             echo "upgrade-test=--upgrade" >>"$GITHUB_OUTPUT"
           fi
 
+      # The runners have about 14 GB free; three test images, a disk image
+      # and the Rust build need more. These preinstalled SDKs are unused here.
+      - name: Free disk space
+        if: steps.changes.outputs.build == 'true'
+        run: |
+          df -h /
+          sudo rm -rf /usr/share/dotnet /usr/local/lib/android /opt/ghc /opt/hostedtoolcache/CodeQL
+          df -h /
+
       - name: Enable KVM
         if: steps.changes.outputs.build == 'true' && matrix.boot-test
         run: |
