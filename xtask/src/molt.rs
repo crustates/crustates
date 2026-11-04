@@ -792,7 +792,7 @@ fn blank_disk(path: &Path, bytes: u64) -> anyhow::Result<()> {
 fn wait_for_install(log: &Path) -> anyhow::Result<(String, String)> {
     let start = Instant::now();
     let (mut seen, mut last_output) = (0, Instant::now());
-    while start.elapsed() < INSTALL_TIMEOUT {
+    while start.elapsed() < INSTALL_TIMEOUT.max(test_timeout()) {
         let serial = std::fs::read(log).unwrap_or_default();
         let text = String::from_utf8_lossy(&serial);
         let value = |key: &str| {
@@ -822,7 +822,7 @@ fn wait_for_install(log: &Path) -> anyhow::Result<(String, String)> {
     }
     bail!(
         "no CRUST-INSTALL: DONE within {} s",
-        INSTALL_TIMEOUT.as_secs()
+        INSTALL_TIMEOUT.max(test_timeout()).as_secs()
     )
 }
 
