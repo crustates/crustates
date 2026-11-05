@@ -11,7 +11,7 @@
     },
     {
       "description": "A new Fedora bootc digest can bring a new kernel; molt/kernel.lock must be bumped in the same PR",
-      "matchPackageNames": ["quay.io/fedora/fedora-bootc"],
+      "matchPackageNames": ["registry.fedoraproject.org/fedora-bootc"],
       "prBodyNotes": [
         "If the build fails on `molt/kernel.lock`, the base image ships a new kernel: check OpenZFS supports it, then update the lock in this PR."
       ]

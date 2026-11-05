@@ -9,8 +9,9 @@
 
 # Fedora 45 bootc, pinned by digest; Renovate bumps it. A new digest that
 # brings a new kernel fails the kernel.lock check below until the lock is
-# bumped in a deliberate PR.
-ARG BASE=quay.io/fedora/fedora-bootc:45@sha256:8076cf4ff9d1fda1fcc759c021b8c317fe2b687ae51259e45917c95fed3308bc
+# bumped in a deliberate PR. Fedora's registry, not quay.io: quay.io drops a
+# digest as soon as the tag moves, which breaks every build pinned to it.
+ARG BASE=registry.fedoraproject.org/fedora-bootc:45@sha256:8076cf4ff9d1fda1fcc759c021b8c317fe2b687ae51259e45917c95fed3308bc
 
 # Builds the release binaries on the same base, so they link against the
 # same glibc as the image.
