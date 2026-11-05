@@ -254,13 +254,13 @@ fn update_line(snap: &Snapshot) -> Line<'static> {
         );
     }
     let booted = molt.booted.as_ref().map_or("", |b| b.version.as_str());
-    status(
-        State::Ok,
-        "Update",
-        LABEL,
-        "up to date",
-        &format!("({booted} on {})", molt.channel),
-    )
+    // The agent picks the channel at its first check.
+    let detail = if molt.channel.is_empty() {
+        format!("({booted})")
+    } else {
+        format!("({booted} on {})", molt.channel)
+    };
+    status(State::Ok, "Update", LABEL, "up to date", &detail)
 }
 
 fn crab(snap: &Snapshot, buf: &mut Buffer, area: Rect) {
