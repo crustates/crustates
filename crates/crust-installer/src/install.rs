@@ -147,6 +147,9 @@ async fn configure(
     std::fs::create_dir_all(&root).map_err(|e| format!("{ROOT}: {e}"))?;
     let partition = root_partition(&answers.disk).await?;
     run("mount", &[&partition, ROOT]).await?;
+    // bootc finishes with `remount,ro`, and that state can outlive its unmount.
+    run("mount", &["-o", "remount,rw", ROOT]).await?;
+    let options = run("findmnt", &["-no", "OPTIONS", ROOT]).await?;
     let result = (|| {
         let deploy = root.join("ostree/deploy/default/deploy");
         let deployment = std::fs::read_dir(&deploy)
@@ -191,7 +194,7 @@ async fn configure(
         Ok::<_, String>(wrote)
     })();
     let _ = run("umount", &[ROOT]).await;
-    result
+    result.map_err(|e| format!("{e} (mounted {})", options.trim()))
 }
 
 /// Installs, reporting each step's progress and log lines on `tx`.
