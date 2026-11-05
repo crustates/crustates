@@ -1,15 +1,16 @@
-//! `crust-api`: runs the control plane. `crust-api new-admin-token` makes a
-//! new admin token instead: it prints the token and stores only its hash.
+//! `crust-api`: runs the control plane. `crust-api new-admin-token` and
+//! `crust-api new-recovery-pin` make a new admin token or recovery PIN
+//! instead: they print it and store only its hash.
 
 use std::io::Write;
-use std::os::unix::fs::OpenOptionsExt;
+use std::os::unix::fs::{FileTypeExt, OpenOptionsExt, PermissionsExt};
 use std::path::Path;
 use std::time::Duration;
 
 use anyhow::{Context, bail};
-use crust_api::{Auth, Config, auth};
+use crust_api::{Auth, Config, Listeners, RecoveryPin, auth, local};
 use crust_store::SqliteStore;
-use tokio::net::TcpListener;
+use tokio::net::{TcpListener, UnixListener};
 use tokio_util::sync::CancellationToken;
 use tracing::info;
 use tracing_subscriber::EnvFilter;
@@ -26,8 +27,17 @@ async fn main() -> anyhow::Result<()> {
     let config = Config::load().context("loading the configuration")?;
     match std::env::args().nth(1).as_deref() {
         None => {}
-        Some("new-admin-token") => return new_admin_token(&config.admin_token_file),
-        Some(other) => bail!("unknown argument {other:?}; the only command is new-admin-token"),
+        Some("new-admin-token") => {
+            let token = auth::new_token().context("making a random token")?;
+            return new_secret(&config.admin_token_file, &token);
+        }
+        Some("new-recovery-pin") => {
+            let pin = local::new_pin().context("making a random PIN")?;
+            return new_secret(&config.recovery_pin_file, &pin);
+        }
+        Some(other) => bail!(
+            "unknown argument {other:?}; the commands are new-admin-token and new-recovery-pin"
+        ),
     }
     let store = SqliteStore::open(&config.database)
         .await
@@ -38,6 +48,10 @@ async fn main() -> anyhow::Result<()> {
     let agents = TcpListener::bind(config.agent_listen)
         .await
         .with_context(|| format!("listening on {}", config.agent_listen))?;
+    let local = match &config.local_socket {
+        Some(path) => Some(local_socket(path)?),
+        None => None,
+    };
     info!(api = %config.listen, agents = %config.agent_listen, docs = %format!("http://{}/docs", config.listen), "control plane started");
 
     let shutdown = CancellationToken::new();
@@ -46,8 +60,12 @@ async fn main() -> anyhow::Result<()> {
         store,
         Duration::from_secs(config.heartbeat_timeout_secs),
         Auth::new(config.admin_token_file),
-        http,
-        agents,
+        RecoveryPin::new(config.recovery_pin_file),
+        Listeners {
+            http,
+            agents,
+            local,
+        },
         shutdown,
     )
     .await?;
@@ -55,11 +73,25 @@ async fn main() -> anyhow::Result<()> {
     Ok(())
 }
 
-/// Writes the hash of a new admin token to `file`, replacing the old one,
-/// and prints the token: the only time it is shown.
-fn new_admin_token(file: &Path) -> anyhow::Result<()> {
-    let token = auth::new_token().context("making a random token")?;
-    let hash = auth::hash(&token).map_err(|e| anyhow::anyhow!("hashing the token: {e}"))?;
+/// Listens on the local socket at `path`, mode 0660: the console runs as
+/// root, and only root's requests are served (ADR 0018).
+fn local_socket(path: &Path) -> anyhow::Result<UnixListener> {
+    // A socket left by the last run; anything else is not ours to remove.
+    if std::fs::symlink_metadata(path).is_ok_and(|m| m.file_type().is_socket()) {
+        std::fs::remove_file(path).with_context(|| format!("removing {}", path.display()))?;
+    }
+    let listener =
+        UnixListener::bind(path).with_context(|| format!("listening on {}", path.display()))?;
+    std::fs::set_permissions(path, std::fs::Permissions::from_mode(0o660))
+        .with_context(|| format!("setting the mode of {}", path.display()))?;
+    Ok(listener)
+}
+
+/// Writes the hash of a new `secret` (an admin token or a recovery PIN) to
+/// `file`, replacing the old one, and prints the secret: the only time it
+/// is shown.
+fn new_secret(file: &Path, secret: &str) -> anyhow::Result<()> {
+    let hash = auth::hash(secret).map_err(|e| anyhow::anyhow!("hashing: {e}"))?;
     if let Some(dir) = file.parent().filter(|d| !d.as_os_str().is_empty()) {
         std::fs::create_dir_all(dir).with_context(|| format!("creating {}", dir.display()))?;
     }
@@ -75,7 +107,7 @@ fn new_admin_token(file: &Path) -> anyhow::Result<()> {
         .with_context(|| format!("writing {}", partial.display()))?;
     writeln!(out, "{hash}").and_then(|()| out.sync_all())?;
     std::fs::rename(&partial, file).with_context(|| format!("replacing {}", file.display()))?;
-    println!("{token}");
+    println!("{secret}");
     Ok(())
 }
 

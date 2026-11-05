@@ -22,6 +22,12 @@ pub struct Config {
     /// The argon2id hash of the admin token (ADR 0015). `crust-api
     /// new-admin-token` writes it.
     pub admin_token_file: PathBuf,
+    /// The argon2id hash of the recovery PIN of the local console (ADR
+    /// 0018). `crust-api new-recovery-pin` writes it.
+    pub recovery_pin_file: PathBuf,
+    /// The Unix socket the local console uses; only root may call through
+    /// it. None: no socket.
+    pub local_socket: Option<PathBuf>,
 }
 
 impl Default for Config {
@@ -32,6 +38,8 @@ impl Default for Config {
             database: PathBuf::from("crust.db"),
             heartbeat_timeout_secs: 15,
             admin_token_file: PathBuf::from("crust-admin-token"),
+            recovery_pin_file: PathBuf::from("crust-recovery-pin"),
+            local_socket: None,
         }
     }
 }

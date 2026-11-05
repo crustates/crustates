@@ -9,8 +9,9 @@
 
 # Fedora 45 bootc, pinned by digest; Renovate bumps it. A new digest that
 # brings a new kernel fails the kernel.lock check below until the lock is
-# bumped in a deliberate PR.
-ARG BASE=quay.io/fedora/fedora-bootc:45@sha256:8076cf4ff9d1fda1fcc759c021b8c317fe2b687ae51259e45917c95fed3308bc
+# bumped in a deliberate PR. Fedora's registry, not quay.io: quay.io drops a
+# digest as soon as the tag moves, which breaks every build pinned to it.
+ARG BASE=registry.fedoraproject.org/fedora-bootc:45@sha256:8076cf4ff9d1fda1fcc759c021b8c317fe2b687ae51259e45917c95fed3308bc
 
 # Builds the release binaries on the same base, so they link against the
 # same glibc as the image.
@@ -28,9 +29,15 @@ COPY crates crates
 COPY xtask xtask
 RUN --mount=type=cache,target=/opt/cargo/registry \
     --mount=type=cache,target=/src/target \
-    cargo build --release --locked -p crust-api -p crust-agent -p crust-cli \
+    cargo build --release --locked -p crust-api -p crust-agent -p crust-cli -p crust-console -p xtask \
     && install -D -m 0755 -t /out/usr/bin \
-        target/release/crust-api target/release/crust-agent target/release/crust
+        target/release/crust-api target/release/crust-agent target/release/crust target/release/crust-console \
+    && install -D -m 0755 target/release/xtask /usr/local/bin/xtask
+# The console font, from this base image's Lat2-Terminus16 (OFL), and the
+# boot splash's images, both drawn by xtask (ADR 0018).
+RUN gunzip -c /usr/lib/kbd/consolefonts/Lat2-Terminus16.psfu.gz >/tmp/Lat2-Terminus16.psfu \
+    && xtask console-font /tmp/Lat2-Terminus16.psfu /out/usr/lib/kbd/consolefonts \
+    && xtask splash /out/usr/share/plymouth/themes/crustates
 
 # cosign, for the agent's image signature checks (ADR 0016). Fedora does not
 # package it, so this is the release binary, pinned by version and checksum.
@@ -75,9 +82,12 @@ RUN --mount=type=bind,source=molt/kernel.lock,target=/run/kernel.lock \
         exit 1; \
     fi
 # No SSH: everything goes through the API. greenboot runs the health checks
-# that roll back a new image (ADR 0016).
+# that roll back a new image (ADR 0016). Plymouth draws the boot splash, with
+# JetBrains Mono for its text; smartmontools reads disk health for the
+# console's diagnostics (ADR 0018).
 RUN dnf -y remove openssh-server \
     && dnf -y install --setopt=install_weak_deps=False greenboot \
+        plymouth plymouth-plugin-script plymouth-plugin-label jetbrains-mono-fonts smartmontools \
     && dnf clean all \
     && rm -rf /run/dnf /var/cache/libdnf5 /var/log/dnf5.log* /var/lib/dnf
 COPY --from=builder /out/ /
@@ -88,9 +98,15 @@ COPY --from=kmod-zfs /out/ /
 RUN depmod -a "$(ls /usr/lib/modules)"
 COPY molt/rootfs/ /
 # Crustates decides when Molt updates (the agent), not bootc's own timer.
+# The console takes tty1 and tty2; no login prompts anywhere (ADR 0018).
+# Fedora runs kmscon on its terminals (autovt@ links to kmsconvt@); the
+# console needs the kernel's own terminal, for its font and palette.
 RUN systemctl enable crust-api.service crust-agent.service crust-firstboot.service nftables.service \
         greenboot-healthcheck.service greenboot-set-rollback-trigger.service crust-boot-trial.service \
-    && systemctl mask bootc-fetch-apply-updates.timer
+        crust-console.service crust-console-logs.service \
+    && rm -f /etc/systemd/system/autovt@.service \
+    && systemctl mask bootc-fetch-apply-updates.timer getty@.service autovt@.service kmsconvt@.service \
+        serial-getty@.service
 # Late, so a new version reuses every layer above.
 ARG VERSION
 LABEL org.opencontainers.image.version=${VERSION}
@@ -99,12 +115,17 @@ LABEL org.opencontainers.image.version=${VERSION}
 RUN test -n "${VERSION}" \
     && printf 'VARIANT="Crustates Molt"\nVARIANT_ID=molt\nIMAGE_ID=molt\nIMAGE_VERSION=%s\n' "${VERSION}" \
         >>/usr/lib/os-release
+# The initramfs again, now with the splash (which shows the version) and the
+# console font; dracut.conf.d/40-crustates.conf leaves ZFS out.
+RUN sed -i "s/@VERSION@/${VERSION}/" /usr/share/plymouth/themes/crustates/crustates.script \
+    && kver=$(ls /usr/lib/modules) \
+    && DRACUT_NO_XATTR=1 dracut --force --kver "$kver" "/usr/lib/modules/$kver/initramfs.img"
 RUN bootc container lint
 
 FROM molt AS molt-test
 COPY molt/test/crust-selftest.sh /usr/libexec/crustates/crust-selftest
 COPY molt/test/crust-selftest.service /usr/lib/systemd/system/
-COPY molt/test/1*-serial-console*.toml /usr/lib/bootc/kargs.d/
+COPY molt/test/1*-serial-console*.toml molt/test/30-crustates-splash.toml /usr/lib/bootc/kargs.d/
 # Updates come from the local registry of `cargo xtask molt test`, unsigned.
 COPY molt/test/molt.toml /usr/lib/crustates/molt.toml
 COPY molt/test/50-crust-test-registry.conf /etc/containers/registries.conf.d/

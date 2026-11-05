@@ -14,6 +14,7 @@
 //!   IMAGE, by default the built `molt:dev`, into `target/molt/images/dist`
 //!
 //! `MOLT_ACCEL=tcg` boots without KVM (slow); see `molt/tools/boot-vm`.
+//! `MOLT_TEST_SECS` lengthens how long a test waits for each selftest.
 
 use std::path::{Path, PathBuf};
 use std::process::Command;
@@ -37,6 +38,14 @@ const TOOLS_IMAGE: &str = "localhost/crustates/molt-tools:dev";
 const API_PORT: u16 = 18080;
 /// How long `molt test` waits for the selftest result.
 const TEST_TIMEOUT: Duration = Duration::from_mins(15);
+/// [`TEST_TIMEOUT`], or `MOLT_TEST_SECS`.
+fn test_timeout() -> Duration {
+    std::env::var("MOLT_TEST_SECS")
+        .ok()
+        .and_then(|s| s.parse().ok())
+        .map_or(TEST_TIMEOUT, Duration::from_secs)
+}
+
 /// How long the serial console may stay silent before `molt test` calls the
 /// VM stalled. Hosted runners occasionally freeze a nested VM in early boot.
 const STALL_TIMEOUT: Duration = Duration::from_mins(5);
@@ -264,6 +273,7 @@ fn self_test(upgrade: bool) -> anyhow::Result<()> {
         ])?;
         let mut serial = Serial { log: &log, from: 0 };
         let token = serial.wait_for_pass(version, false)?;
+        screenshots(&format!("{pod}-vm"), &out)?;
         let api = Api::new(token);
         api.check()?;
         if upgrade {
@@ -275,6 +285,36 @@ fn self_test(upgrade: bool) -> anyhow::Result<()> {
     let _ = podman(&["pod", "rm", "-f", &pod]);
     println!("serial log: {}", log.display());
     result
+}
+
+/// Screenshots of tty1 as PNGs next to the serial log: the first-boot
+/// screen, then, after enter, the home screen of the console.
+fn screenshots(vm: &str, out: &Path) -> anyhow::Result<()> {
+    let shot = |name: &str| -> anyhow::Result<()> {
+        let ppm = out.join(format!("{name}.ppm"));
+        let _ = std::fs::remove_file(&ppm);
+        monitor(vm, &format!("screendump /vm/{name}.ppm"))?;
+        let image = std::fs::read(&ppm).with_context(|| format!("reading {}", ppm.display()))?;
+        let png = out.join(format!("{name}.png"));
+        std::fs::write(&png, crate::console::ppm_to_png(&image)?)
+            .with_context(|| format!("writing {}", png.display()))?;
+        let _ = std::fs::remove_file(&ppm);
+        println!("screenshot: {}", png.display());
+        Ok(())
+    };
+    shot("tty1-first-boot")?;
+    monitor(vm, "sendkey ret")?;
+    // The console reads the machine again at once, then draws the home screen.
+    std::thread::sleep(Duration::from_secs(5));
+    shot("tty1-home")
+}
+
+/// Sends a command to the QEMU monitor of the VM container `vm`.
+fn monitor(vm: &str, command: &str) -> anyhow::Result<()> {
+    // The tools image has no netcat; bash talks TCP. The pause lets QEMU
+    // finish the command before the connection closes.
+    let script = "exec 3<>/dev/tcp/127.0.0.1/4444 && printf '%s\\n' \"$1\" >&3 && sleep 2";
+    podman(&["exec", vm, "bash", "-c", script, "monitor", command])
 }
 
 /// A → B (healthy) → B-bad (fails its health check), which greenboot must
@@ -355,7 +395,7 @@ impl Serial<'_> {
     fn wait_for_pass(&mut self, version: &str, tolerate_fail: bool) -> anyhow::Result<String> {
         let start = Instant::now();
         let (mut seen, mut last_output) = (0, Instant::now());
-        while start.elapsed() < TEST_TIMEOUT {
+        while start.elapsed() < test_timeout() {
             let serial = std::fs::read(self.log).unwrap_or_default();
             let new = serial.get(self.from..).unwrap_or_default();
             match selftest_result(new, version) {
@@ -380,7 +420,7 @@ impl Serial<'_> {
         }
         bail!(
             "no selftest PASS for {version} within {} s",
-            TEST_TIMEOUT.as_secs()
+            test_timeout().as_secs()
         )
     }
 }

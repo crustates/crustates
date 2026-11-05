@@ -75,23 +75,57 @@ retry 60 curl -fsS http://127.0.0.1:8080/healthz || fail "/healthz did not answe
 [ -f /var/lib/crustates/crust.db ] || fail "no database in /var/lib/crustates"
 [ "$(systemctl show -P User crust-api.service)" = crustates ] || fail "crust-api does not run as crustates"
 
-# The admin token: on the first boot from the console message, which is gone
-# after a reboot, so this test keeps a copy (test images only).
-saved=/var/lib/crust-selftest/token
-issue=/run/issue.d/40-crustates-admin-token.issue
-retry 60 test -s "$issue" -o -s "$saved" || fail "no admin token on the console within 60 s"
-if [ -s "$issue" ]; then
-    install -d -m 0700 "$(dirname "$saved")"
-    grep -o 'crt_[0-9A-Z-]*' "$issue" >"$saved"
+# The admin token and recovery PIN: on the first boot from what the console
+# shows, which is gone after a reboot, so this test keeps a copy (test images
+# only).
+saved=/var/lib/crust-selftest
+first=/run/crustates/firstboot.json
+retry 60 test -s "$first" -o -s "$saved/token" || fail "no first-boot secrets within 60 s"
+if [ -s "$first" ]; then
+    [ "$(stat -c '%U %a' "$first")" = "root 600" ] || fail "$first is $(stat -c '%U %a' "$first"), want root 600"
+    install -d -m 0700 "$saved"
+    jq -r .token "$first" >"$saved/token"
+    jq -r .pin "$first" >"$saved/pin"
 fi
-token=$(cat "$saved")
+token=$(cat "$saved/token")
+pin=$(cat "$saved/pin")
+[[ "$pin" =~ ^[0-9]{9}$ ]] || fail "the recovery PIN is not nine digits"
 echo "<2>CRUST-SELFTEST-TOKEN: $token" >/dev/kmsg
 [ "$(stat -c '%U:%G %a' /var/lib/crustates/secrets)" = "root:crustates 750" ] ||
     fail "/var/lib/crustates/secrets is $(stat -c '%U:%G %a' /var/lib/crustates/secrets), want root:crustates 750"
-[ "$(stat -c '%U:%G %a' /var/lib/crustates/secrets/admin-token)" = "root:crustates 640" ] ||
-    fail "the admin token hash is $(stat -c '%U:%G %a' /var/lib/crustates/secrets/admin-token), want root:crustates 640"
+for secret in admin-token recovery-pin; do
+    [ "$(stat -c '%U:%G %a' /var/lib/crustates/secrets/$secret)" = "root:crustates 640" ] ||
+        fail "the $secret hash is $(stat -c '%U:%G %a' /var/lib/crustates/secrets/$secret), want root:crustates 640"
+done
 code=$(curl -s -o /dev/null -w '%{http_code}' http://127.0.0.1:8080/v1/nodes)
 [ "$code" = 401 ] || fail "/v1/nodes without the token answered $code, want 401"
+
+# The local console: on tty1 and tty2, no login prompts, its socket for root.
+for unit in crust-console crust-console-logs; do
+    retry 30 systemctl is-active --quiet "$unit" || fail "$unit is not running"
+done
+[ "$(systemctl is-enabled getty@tty1.service 2>&1)" = masked ] || fail "getty@ is not masked"
+# For the screenshots: the console's size and what it logged.
+echo "<6>crust-selftest: tty1 is $(stty -F /dev/tty1 size 2>&1) (rows columns)" >/dev/kmsg
+journalctl -b -u crust-console --no-pager -o cat | tail -n 5 | while read -r line; do
+    echo "<6>crust-console: $line" >/dev/kmsg
+done
+socket=/run/crustates/api.sock
+[ "$(stat -c '%U:%G %a' "$socket")" = "crustates:crustates 660" ] ||
+    fail "$socket is $(stat -c '%U:%G %a' "$socket" 2>&1), want crustates:crustates 660"
+code=$(curl -s -o /dev/null -w '%{http_code}' --unix-socket "$socket" http://localhost/v1/nodes)
+[ "$code" = 200 ] || fail "/v1/nodes through the local socket answered $code, want 200"
+code=$(curl -s -o /dev/null -w '%{http_code}' --unix-socket "$socket" -H 'content-type: application/json' \
+    -d "{\"pin\":\"$pin\",\"action\":\"selftest\"}" http://localhost/v1/local/pin)
+[ "$code" = 204 ] || fail "the recovery PIN check answered $code, want 204"
+code=$(setpriv --reuid=nobody --regid=nobody --clear-groups curl -s -o /dev/null -w '%{http_code}' --unix-socket "$socket" http://localhost/v1/nodes)
+[ "$code" != 200 ] || fail "the local socket served a user who is not root"
+[ -s /usr/lib/kbd/consolefonts/crustates-console-16.psfu ] || fail "the console font is missing"
+
+# The boot splash is in the initramfs, ZFS is not.
+initramfs="/usr/lib/modules/$(uname -r)/initramfs.img"
+lsinitrd "$initramfs" | grep -q 'plymouth/themes/crustates/crustates.script' || fail "the initramfs has no Crustates splash"
+! lsinitrd "$initramfs" | grep -q '/zfs.ko' || fail "the initramfs has the ZFS module"
 export CRUST_TOKEN=$token
 retry 60 sh -c 'crust node list | grep -qw Ready' || fail "no Ready node within 60 s: $(crust node list 2>&1 | tr '\n' ' ')"
 

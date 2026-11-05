@@ -1,6 +1,9 @@
 #!/bin/bash
-# Makes the admin token: stores its argon2id hash where the API can read but
-# not change it, and shows the token on the console until the next reboot.
+# Makes the admin token and the recovery PIN when they are missing. Stores
+# only their argon2id hashes, where the API can read but not change them,
+# and leaves the secrets for the console to show once: in
+# /run/crustates/firstboot.json, root only, gone after a reboot (ADR 0015,
+# ADR 0018).
 set -euo pipefail
 umask 077
 
@@ -10,18 +13,19 @@ umask 077
 [ -e /var/lib/crustates ] || install -d -m 0750 -o crustates -g crustates /var/lib/crustates
 secrets=/var/lib/crustates/secrets
 install -d -m 0750 -o root -g crustates "$secrets"
-token=$(CRUST_ADMIN_TOKEN_FILE="$secrets/admin-token" /usr/bin/crust-api new-admin-token)
-chgrp crustates "$secrets/admin-token"
-chmod 0640 "$secrets/admin-token"
+token="" pin=""
+if [ ! -e "$secrets/admin-token" ]; then
+    token=$(CRUST_ADMIN_TOKEN_FILE="$secrets/admin-token" /usr/bin/crust-api new-admin-token)
+fi
+# Machines installed before the console have a token but no PIN yet.
+if [ ! -e "$secrets/recovery-pin" ]; then
+    pin=$(CRUST_RECOVERY_PIN_FILE="$secrets/recovery-pin" /usr/bin/crust-api new-recovery-pin)
+fi
+for file in admin-token recovery-pin; do
+    chgrp crustates "$secrets/$file"
+    chmod 0640 "$secrets/$file"
+done
 
-# /run is a tmpfs: the token is gone from the screen after a reboot.
-install -d -m 0755 /run/issue.d
-cat >/run/issue.d/40-crustates-admin-token.issue <<ISSUE
-Crustates admin token: ${token}
-Write it down now: it is shown only until the next reboot.
-On your computer: crust --api http://\4:8080 login
-
-ISSUE
-# Redraw the login prompts that are already up.
-agetty --reload 2>/dev/null || true
-echo "admin token made; it is shown on the console until the next reboot"
+install -d -m 0770 -o root -g crustates /run/crustates
+jq -n --arg token "$token" --arg pin "$pin" '{token: $token, pin: $pin}' >/run/crustates/firstboot.json
+echo "made the first-boot secrets; the console shows them until someone confirms them or the machine reboots"

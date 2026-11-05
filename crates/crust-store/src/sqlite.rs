@@ -235,10 +235,12 @@ impl Store for SqliteStore {
         Ok(())
     }
 
-    async fn audit_log(&self, limit: u32) -> Result<Vec<AuditEntry>, Error> {
+    async fn audit_log(&self, limit: u32, action: Option<&str>) -> Result<Vec<AuditEntry>, Error> {
         let rows: Vec<(String, String, String, String, String)> = sqlx::query_as(
-            "SELECT time, principal, action, target, outcome FROM audit ORDER BY id DESC LIMIT ?",
+            "SELECT time, principal, action, target, outcome FROM audit \
+             WHERE ?1 IS NULL OR action = ?1 ORDER BY id DESC LIMIT ?2",
         )
+        .bind(action)
         .bind(limit)
         .fetch_all(&self.pool)
         .await?;

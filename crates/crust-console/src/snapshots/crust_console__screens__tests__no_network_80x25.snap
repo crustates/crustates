@@ -1,0 +1,29 @@
+---
+source: crates/crust-console/src/screens.rs
+expression: "render(&app, width, height)"
+---
+ Crustates recovery console  Crustates 0.2.0  tty1  local acce 2026-11-03 21:45 
+ ┌ No network connection ─────────────────────────────────────────────────────┐ 
+ │                                                                            │ 
+ │ ■  No network connection                                                   │ 
+ │                                                                            │ 
+ │ ✗ enp3s0        no link: cable unplugged?                                  │ 
+ │   enp4s0        no link                                                    │ 
+ │                                                                            │ 
+ │ The API cannot be reached until there is an address.                       │ 
+ │ NetworkManager keeps trying on its own.                                    │ 
+ │                                                                            │ 
+ │ ● Pools         2 of 2 online  (tank, fast)                                │ 
+ │                                                                            │ 
+ │ ────────────────────────────────────────────────────────────               │ 
+ │                                                                            │ 
+ │  1  Configure network                                                      │ 
+ │  2  Retry DHCP now                                                         │ 
+ │  3  Show diagnostics                                                       │ 
+ │  4  Reboot                                                                 │ 
+ │                                                                            │ 
+ │                                                                            │ 
+ │                                                                            │ 
+ │                                                                            │ 
+ └────────────────────────────────────────────────────────────────────────────┘ 
+  1-4  choose   up/down  move   enter  run   alt+f2  system log

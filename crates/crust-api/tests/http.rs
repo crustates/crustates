@@ -5,8 +5,10 @@
 use std::sync::Arc;
 
 use axum::body::Body;
+use axum::extract::ConnectInfo;
 use axum::http::{Request, StatusCode};
-use crust_api::{AppState, Auth, Commands, auth, router};
+use crust_api::local::Peer;
+use crust_api::{AppState, Auth, Commands, RecoveryPin, auth, local, local_router, router};
 use crust_store::{SqliteStore, Store};
 use crust_types::{NodeSpec, NodeStatus};
 use http_body_util::BodyExt;
@@ -14,10 +16,12 @@ use serde_json::Value;
 use tokio_util::sync::CancellationToken;
 use tower::ServiceExt;
 
-/// A fresh API and its admin token. The directory holds the token hash.
+/// A fresh API, its admin token and recovery PIN. The directory holds
+/// their hashes.
 struct Api {
     state: AppState,
     token: String,
+    pin: String,
     _dir: tempfile::TempDir,
 }
 
@@ -26,14 +30,19 @@ async fn api() -> Api {
     let file = dir.path().join("admin-token");
     let token = auth::new_token().unwrap();
     std::fs::write(&file, auth::hash(&token).unwrap()).unwrap();
+    let pin_file = dir.path().join("recovery-pin");
+    let pin = local::new_pin().unwrap();
+    std::fs::write(&pin_file, auth::hash(&pin).unwrap()).unwrap();
     Api {
         state: AppState {
             store: SqliteStore::memory().await.unwrap(),
             shutdown: CancellationToken::new(),
             auth: Arc::new(Auth::new(file)),
             commands: Commands::default(),
+            pin: Arc::new(RecoveryPin::new(pin_file)),
         },
         token,
+        pin,
         _dir: dir,
     }
 }
@@ -55,6 +64,26 @@ impl Api {
         }
         let response = router(self.state.clone())
             .oneshot(request.body(Body::from(body.to_owned())).unwrap())
+            .await
+            .unwrap();
+        let status = response.status();
+        let body = response.into_body().collect().await.unwrap().to_bytes();
+        (status, String::from_utf8(body.to_vec()).unwrap())
+    }
+
+    /// A request through the local socket from user `uid`.
+    async fn local(&self, method: &str, uri: &str, uid: u32, body: &str) -> (StatusCode, String) {
+        let mut request = Request::builder()
+            .method(method)
+            .uri(uri)
+            .header("content-type", "application/json")
+            .body(Body::from(body.to_owned()))
+            .unwrap();
+        request
+            .extensions_mut()
+            .insert(ConnectInfo(Peer { uid: Some(uid) }));
+        let response = local_router(self.state.clone())
+            .oneshot(request)
             .await
             .unwrap();
         let status = response.status();
@@ -285,4 +314,71 @@ fn collect_refs(value: &Value, refs: &mut Vec<String>) {
         Value::Array(items) => items.iter().for_each(|v| collect_refs(v, refs)),
         _ => {}
     }
+}
+
+#[tokio::test]
+async fn the_local_socket_serves_only_root_and_the_pin_locks_after_five_wrong() {
+    let api = api().await;
+    assert_eq!(
+        api.local("GET", "/v1/nodes", 1000, "").await.0,
+        StatusCode::FORBIDDEN
+    );
+    assert_eq!(api.local("GET", "/v1/nodes", 0, "").await.0, StatusCode::OK);
+
+    let check = |pin: &str| format!(r#"{{"pin":"{pin}","action":"power.reboot"}}"#);
+    let typed = format!("{} {} {}", &api.pin[..3], &api.pin[3..6], &api.pin[6..]);
+    let (status, _) = api.local("POST", "/v1/local/pin", 0, &check(&typed)).await;
+    assert_eq!(status, StatusCode::NO_CONTENT);
+    let wrong = if api.pin == "000000000" {
+        "111111111"
+    } else {
+        "000000000"
+    };
+    for left in (0..5).rev() {
+        let (status, body) = api.local("POST", "/v1/local/pin", 0, &check(wrong)).await;
+        assert_eq!(status, StatusCode::FORBIDDEN, "{body}");
+        let want = if left == 0 {
+            "locked for 15 minutes".to_owned()
+        } else {
+            format!("{left} attempts left")
+        };
+        assert!(body.contains(&want), "{body}");
+    }
+    let (status, body) = api
+        .local("POST", "/v1/local/pin", 0, &check(&api.pin))
+        .await;
+    assert_eq!(
+        status,
+        StatusCode::TOO_MANY_REQUESTS,
+        "the right PIN waits too: {body}"
+    );
+
+    let (_, log) = api.get_json("/v1/audit?action=recovery-pin").await;
+    let outcomes: Vec<&str> = log["items"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .map(|e| e["outcome"].as_str().unwrap())
+        .collect();
+    assert_eq!(
+        outcomes,
+        [
+            "locked",
+            "wrong PIN",
+            "wrong PIN",
+            "wrong PIN",
+            "wrong PIN",
+            "wrong PIN",
+            "ok"
+        ]
+    );
+    assert_eq!(log["items"][0]["principal"], "local console");
+    assert_eq!(log["items"][0]["target"], "power.reboot");
+
+    // The admin token is not the local console.
+    let token = api.token.clone();
+    let (status, _) = api
+        .send("POST", "/v1/local/pin", Some(&token), &check(&api.pin))
+        .await;
+    assert_eq!(status, StatusCode::FORBIDDEN);
 }

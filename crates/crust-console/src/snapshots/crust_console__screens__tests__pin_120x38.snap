@@ -1,0 +1,42 @@
+---
+source: crates/crust-console/src/screens.rs
+expression: "render(&app, width, height)"
+---
+ Crustates recovery console  Crustates 0.2.0  tty1  local access only                                  2026-11-03 21:45 
+                                                                                                                        
+ ┌ node-1 ─────────────────────────────────────┐ ┌ Status ────────────────────────────────────────────────────────────┐ 
+ │                                             │ │                                                                    │ 
+ │                                             │ │ Open the API reference in a browser:                               │ 
+ │                                             │ │                                                                    │ 
+ │                                             │ │   http://10.0.10.2:8080/docs                                       │ 
+ │                                             │ │   or log in with the CLI: crust login --api http://10.0.10.2:8080  │ 
+ │                                             │ │                                                                    │ 
+ │                                             │ │ ● API           running                                            │ 
+ │                                             │ │ ● Agent         running                                            │ 
+ │          █▄ █▄▄            █▄▄█▄▄           │ │ ● Pools         2 of 2 online  (tank, fast)                        │ 
+ │          ████████▀█▄ █▀██┌──────────────────────────────────────────────────────────────┐e                         │ 
+ │          ████▀█▀████ ▀███│                                                              │10.0.10.1  dns 10.0.10.53 │ 
+ │           ███████████████│  Recovery PIN needed                                         │                          │ 
+ │            ▀█████████████│                                                              │───────────────────       │ 
+ │              ██████▀▀▀███│  Roll back to the previous OS (Molt: 0.2.0 → 0.1.0)          │                          │ 
+ │              ████████████│  needs the recovery PIN shown at the first boot.             │                          │ 
+ │               ▀▀▀▀▀▀▀▀▀▀▀│                                                              │                          │ 
+ │                          │     PIN    ●●○○○○○○○                                         │                          │ 
+ │                          │                                                              │)                         │ 
+ │                  crustate│  Five wrong PINs lock it for 15 minutes.                     │                          │ 
+ │                          │                                                              │                          │ 
+ │    Your own cloud, on you│  Forgot the PIN? Reinstalling Molt on the boot disk leaves   │                          │ 
+ │                          │  the other disks and their pools alone.                      │                          │ 
+ │      Crustates 0.2.0 · no└──────────────────────────────────────────────────────────────┘                          │ 
+ │                                             │ │ Actions 2, 3, 4, 6 and 7 ask for the recovery PIN shown at the     │ 
+ │                                             │ │ first boot.                                                        │ 
+ │                                             │ │                                                                    │ 
+ │                                             │ │                                                                    │ 
+ │                                             │ │                                                                    │ 
+ │                                             │ │                                                                    │ 
+ │                                             │ │                                                                    │ 
+ │                                             │ │                                                                    │ 
+ │                                             │ │                                                                    │ 
+ └─────────────────────────────────────────────┘ └────────────────────────────────────────────────────────────────────┘ 
+                                                                                                                        
+  0-9  enter PIN   enter  confirm   esc  cancel

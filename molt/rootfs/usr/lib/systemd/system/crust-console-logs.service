@@ -1,0 +1,20 @@
+# The system log, read-only, on tty2 (alt+f2) (ADR 0018).
+[Unit]
+Description=Crustates system log on tty2
+Documentation=https://github.com/crustates/crustates/blob/development/docs/install.md
+After=systemd-user-sessions.service plymouth-quit-wait.service
+Conflicts=getty@tty2.service
+
+[Service]
+ExecStart=/usr/bin/crust-console --logs
+Environment=TERM=linux
+StandardInput=tty
+StandardOutput=tty
+TTYPath=/dev/tty2
+TTYReset=yes
+TTYVHangup=yes
+Restart=always
+RestartSec=2
+
+[Install]
+WantedBy=multi-user.target

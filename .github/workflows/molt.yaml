@@ -74,6 +74,15 @@ jobs:
             echo "upgrade-test=--upgrade" >>"$GITHUB_OUTPUT"
           fi
 
+      # The runners have about 14 GB free; three test images, a disk image
+      # and the Rust build need more. These preinstalled SDKs are unused here.
+      - name: Free disk space
+        if: steps.changes.outputs.build == 'true'
+        run: |
+          df -h /
+          sudo rm -rf /usr/share/dotnet /usr/local/lib/android /opt/ghc /opt/hostedtoolcache/CodeQL
+          df -h /
+
       - name: Enable KVM
         if: steps.changes.outputs.build == 'true' && matrix.boot-test
         run: |
@@ -123,12 +132,15 @@ jobs:
         if: steps.changes.outputs.build == 'true'
         run: cargo xtask molt build
 
+      # The serial log, and screenshots of the console on tty1.
       - name: Upload the serial log
         if: always() && steps.changes.outputs.build == 'true' && matrix.boot-test
         uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: serial-log-${{ matrix.arch }}
-          path: target/molt/dev-test/serial.log
+          path: |
+            target/molt/dev-test/serial.log
+            target/molt/dev-test/*.png
           if-no-files-found: ignore
 
       - name: Export the image
@@ -319,6 +331,8 @@ jobs:
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
+          # The images were made by root (sudo podman); the signatures go next to them.
+          sudo chown -R "$(id -u):$(id -g)" target/molt/images/dist
           cd target/molt/images/dist
           for file in *.qcow2 *.raw.zst *.SHA256SUMS; do
             cosign sign-blob --yes --bundle "$file.sigstore.json" "$file" >/dev/null

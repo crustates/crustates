@@ -200,7 +200,7 @@ async fn watch_sees_changes_in_order<S: Store>(store: &S) {
 }
 
 async fn audit_log_is_newest_first_and_limited<S: Store>(store: &S) {
-    assert_eq!(store.audit_log(10).await.expect("empty log"), []);
+    assert_eq!(store.audit_log(10, None).await.expect("empty log"), []);
     // Equal times: the order of writing decides.
     let time = jiff::Timestamp::now();
     for action in ["first", "second", "third"] {
@@ -215,11 +215,17 @@ async fn audit_log_is_newest_first_and_limited<S: Store>(store: &S) {
             .await
             .expect("audit");
     }
-    let log = store.audit_log(2).await.expect("audit log");
+    let log = store.audit_log(2, None).await.expect("audit log");
     let actions: Vec<&str> = log.iter().map(|e| e.action.as_str()).collect();
     assert_eq!(actions, ["third", "second"]);
     assert_eq!(log[0].time, time);
     assert_eq!(log[0].target, "node/a");
+    let only = store
+        .audit_log(10, Some("first"))
+        .await
+        .expect("one action");
+    assert_eq!(only.len(), 1);
+    assert_eq!(only[0].action, "first");
 }
 
 async fn next<K: Kind>(events: &mut (impl futures::Stream<Item = Event<K>> + Unpin)) -> Event<K> {

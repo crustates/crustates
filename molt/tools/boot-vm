@@ -6,6 +6,8 @@
 #   boot-vm DISK LOGFILE    serial console written to LOGFILE, no terminal
 #
 # The guest's port 8080 (the Crustates API) is forwarded to port 8080 here.
+# With LOGFILE, the QEMU monitor listens on 127.0.0.1:4444 inside this
+# container: `cargo xtask molt test` takes screenshots of tty1 through it.
 #
 # MOLT_ACCEL=tcg emulates the CPU instead of using KVM: about 10x slower, for
 # hosts where KVM is missing or broken (nested KVM in a macOS podman machine
@@ -29,10 +31,13 @@ case "$(uname -m)" in
     x86_64)
         qemu=qemu-system-x86_64 machine=q35
         code=/usr/share/edk2/ovmf/OVMF_CODE.fd vars=/usr/share/edk2/ovmf/OVMF_VARS.fd
+        display=(-vga none -device virtio-vga)
         ;;
     aarch64)
         qemu=qemu-system-aarch64 machine=virt
         code=/usr/share/edk2/aarch64/QEMU_EFI-pflash.raw vars=/usr/share/edk2/aarch64/vars-template-pflash.raw
+        # virt has no keyboard of its own: screenshots send keys to it.
+        display=(-device virtio-gpu-pci -device virtio-keyboard-pci)
         ;;
 esac
 cp "$vars" /tmp/vars.fd
@@ -44,9 +49,10 @@ args=(
     -drive "if=virtio,format=qcow2,file=$disk,snapshot=on"
     -netdev "user,id=net0,hostfwd=tcp::8080-:8080"
     -device "virtio-net-pci,netdev=net0"
+    "${display[@]}"
 )
 if [ -n "$log" ]; then
-    args+=(-display none -serial "file:$log" -monitor none)
+    args+=(-display none -serial "file:$log" -monitor "tcp:127.0.0.1:4444,server=on,wait=off")
 else
     args+=(-nographic)
 fi

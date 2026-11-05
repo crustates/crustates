@@ -21,3 +21,4 @@ node_modules/
 /crust.db*
 # local admin token hash (`cargo run -p crust-api -- new-admin-token`)
 /crust-admin-token*
+/crust-recovery-pin*

@@ -31,8 +31,12 @@ async fn agent_heartbeats_drive_node_readiness_and_commands_reach_the_agent() {
         store.clone(),
         Duration::from_millis(500),
         Auth::new(token_file),
-        http,
-        agents,
+        crust_api::RecoveryPin::new(dir.path().join("recovery-pin")),
+        crust_api::Listeners {
+            http,
+            agents,
+            local: Some(tokio::net::UnixListener::bind(dir.path().join("api.sock")).unwrap()),
+        },
         server_shutdown.clone(),
     ));
 
@@ -49,6 +53,12 @@ async fn agent_heartbeats_drive_node_readiness_and_commands_reach_the_agent() {
     let agent = tokio::spawn(crust_agent::run(config, Some(os), agent_shutdown.clone()));
 
     wait_for(&store, ConditionStatus::True).await;
+    if !is_root() {
+        assert_eq!(
+            local_status(&dir.path().join("api.sock")).await,
+            "HTTP/1.1 403 Forbidden"
+        );
+    }
     let node = store.get::<NodeSpec>("e2e").await.unwrap();
     assert!(node.status.cpus > 0);
     assert_eq!(node.status.arch, std::env::consts::ARCH);
@@ -99,7 +109,7 @@ async fn agent_heartbeats_drive_node_readiness_and_commands_reach_the_agent() {
     })
     .await
     .unwrap();
-    let audit = store.audit_log(1).await.unwrap();
+    let audit = store.audit_log(1, None).await.unwrap();
     assert_eq!(
         (audit[0].action.as_str(), audit[0].outcome.as_str()),
         ("molt.upgrade", "ok")
@@ -145,6 +155,23 @@ async fn switch_channel(client: &reqwest::Client, api: &str, token: &str) {
         body["message"],
         "following development; available: 1.2 (sha256:12); crust molt upgrade stages it"
     );
+}
+
+/// The status line of a request to the local socket.
+async fn local_status(socket: &std::path::Path) -> String {
+    use tokio::io::{AsyncReadExt, AsyncWriteExt};
+    let mut stream = tokio::net::UnixStream::connect(socket).await.unwrap();
+    stream
+        .write_all(b"GET /v1/nodes HTTP/1.1\r\nHost: localhost\r\nConnection: close\r\n\r\n")
+        .await
+        .unwrap();
+    let mut response = String::new();
+    stream.read_to_string(&mut response).await.unwrap();
+    response.lines().next().unwrap_or_default().to_owned()
+}
+
+fn is_root() -> bool {
+    std::fs::metadata("/proc/self").is_ok_and(|m| std::os::unix::fs::MetadataExt::uid(&m) == 0)
 }
 
 async fn wait_for(store: &SqliteStore, want: ConditionStatus) {

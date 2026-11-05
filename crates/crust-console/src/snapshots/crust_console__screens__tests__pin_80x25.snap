@@ -1,0 +1,29 @@
+---
+source: crates/crust-console/src/screens.rs
+expression: "render(&app, width, height)"
+---
+ Crustates recovery console  Crustates 0.2.0  tty1  local acce 2026-11-03 21:45 
+ ┌ Status ────────────────────────────────────────────────────────────────────┐ 
+ │                                                                            │ 
+ │ Open the API reference in a browser:                                       │ 
+ │                                                                            │ 
+ │   htt┌──────────────────────────────────────────────────────────────┐      │ 
+ │   or │                                                              │      │ 
+ │      │  Recovery PIN needed                                         │      │ 
+ │ ● API│                                                              │      │ 
+ │ ● Age│  Roll back to the previous OS (Molt: 0.2.0 → 0.1.0)          │      │ 
+ │ ● Poo│  needs the recovery PIN shown at the first boot.             │      │ 
+ │ ● Upd│                                                              │      │ 
+ │   Net│     PIN    ●●○○○○○○○                                         │      │ 
+ │ ─────│                                                              │      │ 
+ │ Recov│  Five wrong PINs lock it for 15 minutes.                     │      │ 
+ │  1  S│                                                              │      │ 
+ │  2  R│  Forgot the PIN? Reinstalling Molt on the boot disk leaves   │      │ 
+ │  3  R│  the other disks and their pools alone.                      │      │ 
+ │  4  M└──────────────────────────────────────────────────────────────┘      │ 
+ │  5  Show diagnostics                                                       │ 
+ │  6  Reboot                                                                 │ 
+ │  7  Shut down                                                              │ 
+ │ Actions 2, 3, 4, 6 and 7 ask for the recovery PIN shown at the first boot. │ 
+ └────────────────────────────────────────────────────────────────────────────┘ 
+  0-9  enter PIN   enter  confirm   esc  cancel

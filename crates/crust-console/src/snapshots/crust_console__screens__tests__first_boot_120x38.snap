@@ -1,0 +1,42 @@
+---
+source: crates/crust-console/src/screens.rs
+expression: "render(&app, width, height)"
+---
+ Crustates  Crustates 0.2.0  tty1  first boot                                                          2026-11-03 21:45 
+                                                                                                                        
+ ┌ Scan with your phone ───────────────────────┐ ┌ Finish setup ──────────────────────────────────────────────────────┐ 
+ │                                             │ │                                                                    │ 
+ │                                             │ │ 1  From a computer on the same network, log in:                    │ 
+ │                                             │ │                                                                    │ 
+ │                                             │ │      crust login --api http://10.0.10.2:8080                       │ 
+ │                                             │ │                                                                    │ 
+ │                                             │ │ 2  Enter this admin token when it asks:                            │ 
+ │       █▀▀▀▀▀█ ▀██ █▄▄▀██▀▀█ █▀▀▀▀▀█         │ │                                                                    │ 
+ │       █ ███ █ ▀▀▀   █▀▀▄█ ▀ █ ███ █         │ │       crt_AAAAA-BBBBB-CCCCC-DDDDD                                  │ 
+ │       █ ▀▀▀ █ ▄ ██▀▀▀█ █▄██ █ ▀▀▀ █         │ │                                                                    │ 
+ │       ▀▀▀▀▀▀▀ ▀▄▀▄▀ █▄█ ▀▄▀ ▀▀▀▀▀▀▀         │ │ 3  Keep the recovery PIN for this screen:                          │ 
+ │       █ ▀ ▄ ▀█▄▄█▄▀██  ▀ ▀▀▄▄▀  ▀▄█         │ │                                                                    │ 
+ │       ▄▄▄ █▀▀██▀ ▄█▄ ▀ ▄ █ █▀█▄▀▀ ▀         │ │       482 913 075                                                  │ 
+ │         ▄▀█▄▀▄█▄█ ▄▀ ▀█ ▄▀▀██▀  ▄▄█         │ │                                                                    │ 
+ │       ▄█▄▄▄▀▀▀ ▀▄██▀█▄█  ▄ ▀▀▀▀▀  ▀         │ │    Rollback, network changes and reboots here ask for it.          │ 
+ │        ▄██▀█▀▄████▀██   █▀ ▀█  █▄▄█         │ │                                                                    │ 
+ │       ▀▀▄ █ ▀▄ █▀▄ ▄ ▀  ▄ ▀ ▄█▄   ▀         │ │ !  Write them down. They are not shown again after you press enter │ 
+ │       ▀▀▀ ▀ ▀ █ ▀█ ▀ ▀█ █▀█▀▀▀██▄▀▄         │ │ or the machine reboots.                                            │ 
+ │       █▀▀▀▀▀█ ▀▀▀▀ ▀█▄█▀▀██ ▀ █  ▄▀         │ │                                                                    │ 
+ │       █ ███ █  ▀██▀██  █▀▀█▀▀▀█  █▀         │ │ ────────────────────────────────────────────────────────────       │ 
+ │       █ ▀▀▀ █ ▀█ ▄█ ▀▀ ▄ █▄  ▀▀ ▀▀▀         │ │ ● API           running                                            │ 
+ │       ▀▀▀▀▀▀▀ ▀▀▀ ▀▀▀▀▀▀ ▀▀▀ ▀▀   ▀         │ │ ● Agent         running                                            │ 
+ │                                             │ │   Network       enp3s0  10.0.10.2/24  gw 10.0.10.1  dns 10.0.10.53 │ 
+ │                                             │ │                                                                    │ 
+ │                                             │ │                                                                    │ 
+ │         http://10.0.10.2:8080/docs          │ │                                                                    │ 
+ │           Opens the API reference           │ │                                                                    │ 
+ │                                             │ │                                                                    │ 
+ │                                             │ │                                                                    │ 
+ │                                             │ │                                                                    │ 
+ │                                             │ │                                                                    │ 
+ │                                             │ │                                                                    │ 
+ │                                             │ │                                                                    │ 
+ └─────────────────────────────────────────────┘ └────────────────────────────────────────────────────────────────────┘ 
+                                                                                                                        
+  enter  I wrote them down   f2  network   f3  diagnostics   alt+f2  system log   f12  reboot or shut down
