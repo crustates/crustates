@@ -37,6 +37,9 @@ const PAYLOAD: &str = "/usr/lib/crustates/installer-payload";
 const SECRETS: &str = "/run/crust-installer/secrets";
 /// The label of a stick with `answers.toml`.
 const ANSWERS_LABEL: &str = "/dev/disk/by-label/CRUSTANS";
+/// Exit status of a failed install from an answers file. The service does not
+/// restart on it: a retry would wipe the disk again and make new secrets.
+const UNATTENDED_FAILED: i32 = 3;
 /// Answers a virtual machine gets from QEMU (`-fw_cfg`).
 const ANSWERS_FW_CFG: &str = "/sys/firmware/qemu_fw_cfg/by_name/opt/crustates/answers/raw";
 
@@ -75,7 +78,11 @@ fn main() -> anyhow::Result<()> {
             None => runtime.block_on(answers_stick()),
         };
         if let Some(path) = answers {
-            return runtime.block_on(unattended(&path));
+            if let Err(e) = runtime.block_on(unattended(&path)) {
+                eprintln!("Error: {e:#}");
+                std::process::exit(UNATTENDED_FAILED);
+            }
+            return Ok(());
         }
     }
     let vt = std::env::var("TERM").is_ok_and(|t| t == "linux");
@@ -143,7 +150,9 @@ fn payload() -> anyhow::Result<String> {
 fn say(line: &str) {
     println!("{line}");
     if let Ok(mut kmsg) = std::fs::OpenOptions::new().write(true).open("/dev/kmsg") {
-        let _ = writeln!(kmsg, "<2>{line}");
+        // One write: each write to /dev/kmsg is one record, and `writeln!`
+        // would send the level, the text and the newline separately.
+        let _ = kmsg.write_all(format!("<2>{line}\n").as_bytes());
     }
 }
 

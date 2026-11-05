@@ -54,8 +54,10 @@ squashfs, the media checksum).
   installed machine records the digest the release workflow signed. An OCI
   layout keeps the compressed layers; `containers-storage` would need about
   as much memory as the image during the install (image-builder #2536).
-- `crust-installer` installs with `bootc install to-disk --wipe` from that
-  layout, with `--target-imgref ghcr.io/crustates/molt:<channel>`, then
+- `crust-installer` installs with `bootc install to-disk --wipe
+  --source-imgref <layout>` on the live system, not in a container: `podman
+  run` would first copy the image into its storage, which on a live system
+  is memory. With `--target-imgref ghcr.io/crustates/molt:<channel>`, it then
   writes the hostname, the network, the channel and the hashes of the admin
   token and recovery PIN into the new system, and makes the ZFS pool.
   `crust-firstboot` gives the hashes their group at the first boot.

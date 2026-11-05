@@ -21,7 +21,7 @@ expression: big
  │                                                                                                                    │ 
  │ Remove the USB stick, then press enter to reboot.                                                                  │ 
  │ The machine's screen then shows its address and the recovery console.                                              │ 
- │ $ podman run … bootc install to-disk --wipe /dev/nvme0n1                                                           │ 
+ │ $ bootc install to-disk --wipe … /dev/nvme0n1                                                                      │ 
  │ Installation complete!                                                                                             │ 
  │                                                                                                                    │ 
  │                                                                                                                    │ 

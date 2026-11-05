@@ -22,7 +22,8 @@ RUN case "$(uname -m)" in \
     && mkdir -p /boot/efi && cp -ra /usr/lib/efi/*/*/EFI /boot/efi
 
 # The image to install, by digest as the release workflow signed it (or the
-# local test image): an OCI layout, so installing needs no extra memory.
+# local test image): an OCI layout that bootc reads directly, so installing
+# needs no extra memory.
 RUN --mount=type=bind,from=payload,target=/payload \
     skopeo copy --preserve-digests oci:/payload oci:/usr/lib/crustates/payload:molt \
     && echo "oci:/usr/lib/crustates/payload:molt" >/usr/lib/crustates/installer-payload
@@ -33,6 +34,7 @@ COPY molt/installer/crust-installer.service /usr/lib/systemd/system/
 RUN systemctl mask crust-api.service crust-agent.service crust-firstboot.service crust-console.service \
         crust-boot-trial.service greenboot-healthcheck.service greenboot-set-rollback-trigger.service \
         zfs-import-scan.service zfs-import-cache.service bootloader-update.service \
+        crust-selftest.service \
     && systemctl enable crust-installer.service
 
 # The boot menu (design kit: lc-boot-menu). image-builder renders each entry

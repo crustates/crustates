@@ -963,7 +963,7 @@ mod tests {
             ("Create pool tank (ZFS mirror)".into(), Phase::Next),
         ];
         app.log = vec![
-            "$ podman run … bootc install to-disk --wipe /dev/nvme0n1".into(),
+            "$ bootc install to-disk --wipe … /dev/nvme0n1".into(),
             "Installation complete!".into(),
         ];
         cases.push(("install", render(&app, 120, 38), render(&app, 80, 25)));

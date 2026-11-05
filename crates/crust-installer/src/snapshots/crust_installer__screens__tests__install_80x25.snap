@@ -16,7 +16,7 @@ expression: small
  └────────────────────────────────────────────────────────────────────────────┘ 
  ┌ Log ───────────────────────────────────────────────────────────────────────┐ 
  │                                                                            │ 
- │ $ podman run … bootc install to-disk --wipe /dev/nvme0n1                   │ 
+ │ $ bootc install to-disk --wipe … /dev/nvme0n1                              │ 
  │ Installation complete!                                                     │ 
  │                                                                            │ 
  │                                                                            │ 

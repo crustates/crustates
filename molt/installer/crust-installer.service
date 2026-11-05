@@ -14,6 +14,7 @@ TTYPath=/dev/tty1
 TTYReset=yes
 TTYVHangup=yes
 Restart=on-failure
+RestartPreventExitStatus=3
 RestartSec=2
 
 [Install]

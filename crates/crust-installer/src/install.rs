@@ -34,33 +34,22 @@ pub fn steps(answers: &Answers) -> Vec<String> {
     steps
 }
 
-/// The `podman` and `bootc` arguments that write `payload` (a
-/// `containers-storage` image of this media) to the boot disk. The new
-/// system follows its channel in the registry.
+/// The `bootc` arguments that write `payload` (the media's OCI layout) to the
+/// boot disk. The live system is this image, so bootc runs on it directly:
+/// `podman run` would first copy the image into its storage, which on a live
+/// system is memory. The new system follows its channel in the registry.
 #[must_use]
 pub fn bootc_args(answers: &Answers, payload: &str) -> Vec<String> {
-    let mut args: Vec<String> = [
-        "run",
-        "--rm",
-        "--privileged",
-        "--pid=host",
-        "--security-opt",
-        "label=type:unconfined_t",
-        "-v",
-        "/dev:/dev",
-        "-v",
-        "/var/lib/containers:/var/lib/containers",
-    ]
-    .map(String::from)
-    .to_vec();
-    args.push(payload.into());
-    args.extend(["bootc", "install", "to-disk", "--wipe"].map(String::from));
-    args.extend([
+    vec![
+        "install".into(),
+        "to-disk".into(),
+        "--wipe".into(),
+        "--source-imgref".into(),
+        payload.into(),
         "--target-imgref".into(),
         format!("{REPOSITORY}:{}", answers.channel),
-    ]);
-    args.push(answers.disk.clone());
-    args
+        answers.disk.clone(),
+    ]
 }
 
 /// The `zpool create` arguments for the answers' pool.
@@ -213,7 +202,7 @@ pub async fn install(answers: Answers, payload: String, secrets: PathBuf, tx: mp
         };
         let interface = if answers.network.interface.is_empty() { crate::system::first_port() } else { answers.network.interface.clone() };
         step(0, Phase::Now).await;
-        if let Err(e) = logged("podman", &bootc_args(&answers, &payload), &tx).await {
+        if let Err(e) = logged("bootc", &bootc_args(&answers, &payload), &tx).await {
             step(0, Phase::Failed).await;
             return Err(e);
         }
@@ -273,8 +262,11 @@ mod tests {
             }),
             ..Answers::default()
         };
-        let args = bootc_args(&answers, "localhost/molt:0.2.0").join(" ");
-        assert!(args.ends_with("localhost/molt:0.2.0 bootc install to-disk --wipe --target-imgref ghcr.io/crustates/molt:beta /dev/vda"), "{args}");
+        let args = bootc_args(&answers, "oci:/payload:molt").join(" ");
+        assert_eq!(
+            args,
+            "install to-disk --wipe --source-imgref oci:/payload:molt --target-imgref ghcr.io/crustates/molt:beta /dev/vda"
+        );
         assert!(
             zpool_args(&answers)
                 .unwrap()
