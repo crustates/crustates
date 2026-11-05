@@ -10,6 +10,7 @@ ExecStart=/usr/bin/crust-console --logs
 Environment=TERM=linux
 StandardInput=tty
 StandardOutput=tty
+StandardError=journal
 TTYPath=/dev/tty2
 TTYReset=yes
 TTYVHangup=yes

@@ -84,7 +84,8 @@ first=/run/crustates/firstboot.json
 # the test hands them back through QEMU as "TOKEN PIN".
 fw_cfg=/sys/firmware/qemu_fw_cfg/by_name/opt/crustates/secrets/raw
 modprobe qemu_fw_cfg 2>/dev/null || true
-if [ -s "$fw_cfg" ] && [ ! -s "$saved/token" ]; then
+# -e, not -s: the kernel gives fw_cfg files a size of 0.
+if [ -e "$fw_cfg" ] && [ ! -s "$saved/token" ]; then
     install -d -m 0700 "$saved"
     read -r fw_token fw_pin <"$fw_cfg"
     echo "$fw_token" >"$saved/token"
@@ -134,7 +135,7 @@ code=$(setpriv --reuid=nobody --regid=nobody --clear-groups curl -s -o /dev/null
 
 # Installed from the ISO (cargo xtask molt test-install): the answers file
 # named the host and asked for a mirrored pool, which must be imported.
-if [ -s "$fw_cfg" ]; then
+if [ -e "$fw_cfg" ]; then
     [ "$(hostname)" = install-test ] || fail "the hostname is $(hostname), want install-test from the answers file"
     retry 60 sh -c 'zpool list -H -o health tank | grep -qx ONLINE' ||
         fail "the pool the installer made is not imported: $(zpool import 2>&1 | tr '\n' ' ')"
