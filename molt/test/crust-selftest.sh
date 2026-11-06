@@ -116,6 +116,10 @@ for unit in crust-console crust-console-logs; do
     retry 30 systemctl is-active --quiet "$unit" || fail "$unit is not running"
 done
 [ "$(systemctl is-enabled getty@tty1.service 2>&1)" = masked ] || fail "getty@ is not masked"
+# The console repaints every 30 s, and it must survive that.
+sleep 35
+[ "$(systemctl show -P NRestarts crust-console.service)" = 0 ] ||
+    fail "crust-console restarted: $(journalctl -b -u crust-console --no-pager -o cat | tail -n 3 | tr '\n' ' ')"
 # For the screenshots: the console's size and what it logged.
 echo "<6>crust-selftest: tty1 is $(stty -F /dev/tty1 size 2>&1) (rows columns)" >/dev/kmsg
 journalctl -b -u crust-console --no-pager -o cat | tail -n 5 | while read -r line; do

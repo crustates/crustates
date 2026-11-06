@@ -20,6 +20,7 @@ use crust_tui::glyphs::Glyphs;
 use crust_tui::palette;
 use crust_tui::psf::Psf;
 use ratatui::DefaultTerminal;
+use ratatui::backend::Backend;
 use ratatui::crossterm::event::{self, Event, KeyCode, KeyEventKind, KeyModifiers};
 use tokio::io::AsyncBufReadExt;
 use tokio::sync::mpsc;
@@ -89,13 +90,6 @@ fn main() -> anyhow::Result<()> {
 /// font's characters (ASCII if the font did not load).
 fn set_up_vt() -> Glyphs {
     use std::io::Write;
-    // Kernel messages go to tty12 instead of over the console; the journal
-    // and the serial port still have them. The kernel redirects only to an
-    // allocated terminal, and opening it allocates it.
-    let _ = std::fs::OpenOptions::new().write(true).open("/dev/tty12");
-    let _ = std::process::Command::new("setterm")
-        .args(["--msgredirect", "12"])
-        .status();
     print!("{}", palette::vt_palette());
     let _ = std::io::stdout().flush();
     // Past 240 columns at 8×16, the doubled font keeps text readable.
@@ -188,7 +182,11 @@ async fn run_console<S: System>(
         // view changes, and now and then.
         let now_view = (app.screen, app.main(), app.modal.is_some());
         if vt && (now_view != view || repainted.elapsed() > Duration::from_secs(30)) {
-            terminal.clear()?;
+            // Not `terminal.clear()`: it asks the terminal for the cursor, and
+            // the answer never comes while `read_keys` waits for a key. The
+            // blank frame makes the next draw paint every cell.
+            terminal.backend_mut().clear()?;
+            terminal.draw(|_| {})?;
             (view, repainted) = (now_view, Instant::now());
         }
         terminal.draw(|frame| {
