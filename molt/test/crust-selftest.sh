@@ -80,8 +80,19 @@ retry 60 curl -fsS http://127.0.0.1:8080/healthz || fail "/healthz did not answe
 # only).
 saved=/var/lib/crust-selftest
 first=/run/crustates/firstboot.json
+# Installed from the ISO: the installer made the secrets and printed them;
+# the test hands them back through QEMU as "TOKEN PIN".
+fw_cfg=/sys/firmware/qemu_fw_cfg/by_name/opt/crustates/secrets/raw
+modprobe qemu_fw_cfg 2>/dev/null || true
+# -e, not -s: the kernel gives fw_cfg files a size of 0.
+if [ -e "$fw_cfg" ] && [ ! -s "$saved/token" ]; then
+    install -d -m 0700 "$saved"
+    read -r fw_token fw_pin <"$fw_cfg"
+    echo "$fw_token" >"$saved/token"
+    echo "$fw_pin" >"$saved/pin"
+fi
 retry 60 test -s "$first" -o -s "$saved/token" || fail "no first-boot secrets within 60 s"
-if [ -s "$first" ]; then
+if [ -s "$first" ] && [ ! -s "$saved/token" ]; then
     [ "$(stat -c '%U %a' "$first")" = "root 600" ] || fail "$first is $(stat -c '%U %a' "$first"), want root 600"
     install -d -m 0700 "$saved"
     jq -r .token "$first" >"$saved/token"
@@ -105,6 +116,10 @@ for unit in crust-console crust-console-logs; do
     retry 30 systemctl is-active --quiet "$unit" || fail "$unit is not running"
 done
 [ "$(systemctl is-enabled getty@tty1.service 2>&1)" = masked ] || fail "getty@ is not masked"
+# The console repaints every 30 s, and it must survive that.
+sleep 35
+[ "$(systemctl show -P NRestarts crust-console.service)" = 0 ] ||
+    fail "crust-console restarted: $(journalctl -b -u crust-console --no-pager -o cat | tail -n 3 | tr '\n' ' ')"
 # For the screenshots: the console's size and what it logged.
 echo "<6>crust-selftest: tty1 is $(stty -F /dev/tty1 size 2>&1) (rows columns)" >/dev/kmsg
 journalctl -b -u crust-console --no-pager -o cat | tail -n 5 | while read -r line; do
@@ -121,6 +136,14 @@ code=$(curl -s -o /dev/null -w '%{http_code}' --unix-socket "$socket" -H 'conten
 code=$(setpriv --reuid=nobody --regid=nobody --clear-groups curl -s -o /dev/null -w '%{http_code}' --unix-socket "$socket" http://localhost/v1/nodes)
 [ "$code" != 200 ] || fail "the local socket served a user who is not root"
 [ -s /usr/lib/kbd/consolefonts/crustates-console-16.psfu ] || fail "the console font is missing"
+
+# Installed from the ISO (cargo xtask molt test-install): the answers file
+# named the host and asked for a mirrored pool, which must be imported.
+if [ -e "$fw_cfg" ]; then
+    [ "$(hostname)" = install-test ] || fail "the hostname is $(hostname), want install-test from the answers file"
+    retry 60 sh -c 'zpool list -H -o health tank | grep -qx ONLINE' ||
+        fail "the pool the installer made is not imported: $(zpool import 2>&1 | tr '\n' ' ')"
+fi
 
 # The boot splash is in the initramfs, ZFS is not.
 initramfs="/usr/lib/modules/$(uname -r)/initramfs.img"

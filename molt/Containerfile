@@ -6,6 +6,9 @@
 #   molt-test      molt plus crust-selftest.service, for boot tests only; it
 #                  updates from the test registry without signature checks
 #   molt-test-bad  molt-test whose health check fails, to test rollbacks
+#
+# The install media is molt/installer/Containerfile, built on top of one of
+# these.
 
 # Fedora 45 bootc, pinned by digest; Renovate bumps it. A new digest that
 # brings a new kernel fails the kernel.lock check below until the lock is
@@ -29,9 +32,10 @@ COPY crates crates
 COPY xtask xtask
 RUN --mount=type=cache,target=/opt/cargo/registry \
     --mount=type=cache,target=/src/target \
-    cargo build --release --locked -p crust-api -p crust-agent -p crust-cli -p crust-console -p xtask \
+    cargo build --release --locked -p crust-api -p crust-agent -p crust-cli -p crust-console -p crust-installer -p xtask \
     && install -D -m 0755 -t /out/usr/bin \
         target/release/crust-api target/release/crust-agent target/release/crust target/release/crust-console \
+        target/release/crust-installer \
     && install -D -m 0755 target/release/xtask /usr/local/bin/xtask
 # The console font, from this base image's Lat2-Terminus16 (OFL), and the
 # boot splash's images, both drawn by xtask (ADR 0018).
@@ -99,11 +103,12 @@ RUN depmod -a "$(ls /usr/lib/modules)"
 COPY molt/rootfs/ /
 # Crustates decides when Molt updates (the agent), not bootc's own timer.
 # The console takes tty1 and tty2; no login prompts anywhere (ADR 0018).
+# ZFS pools, such as one the installer made, are imported at boot.
 # Fedora runs kmscon on its terminals (autovt@ links to kmsconvt@); the
 # console needs the kernel's own terminal, for its font and palette.
 RUN systemctl enable crust-api.service crust-agent.service crust-firstboot.service nftables.service \
         greenboot-healthcheck.service greenboot-set-rollback-trigger.service crust-boot-trial.service \
-        crust-console.service crust-console-logs.service \
+        crust-console.service crust-console-logs.service zfs-import-scan.service zfs-import.target zfs.target \
     && rm -f /etc/systemd/system/autovt@.service \
     && systemctl mask bootc-fetch-apply-updates.timer getty@.service autovt@.service kmsconvt@.service \
         serial-getty@.service

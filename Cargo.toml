@@ -12,6 +12,7 @@ publish = false
 [workspace.dependencies]
 crust-agent = { path = "crates/crust-agent" }
 crust-api = { path = "crates/crust-api" }
+crust-installer = { path = "crates/crust-installer" }
 crust-proto = { path = "crates/crust-proto" }
 crust-reconcile = { path = "crates/crust-reconcile" }
 crust-store = { path = "crates/crust-store" }

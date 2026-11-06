@@ -58,6 +58,7 @@ Code names stay plain: a crate or module is `vm-driver`, not `tide-driver`.
 | `crates/crust-cli`       | The `crust` CLI                                  |
 | `crates/crust-tui`       | Palette, console font, widgets of text screens   |
 | `crates/crust-console`   | The console on the machine's screen (tty1, tty2) |
+| `crates/crust-installer` | The installer on the install media (ISO)         |
 | `xtask/`                 | `cargo xtask` build tasks                        |
 | `molt/`                  | Molt OS image: Containerfile, rootfs, selftest   |
 | `sdk/`                   | Client SDK and `openapi.json` (Apache-2.0)       |
@@ -100,6 +101,10 @@ this.
   throwaway key unless `MOLT_SIGNING_KEY` and `MOLT_SIGNING_CERT` are set.
 - `cargo xtask molt images [IMAGE]` makes the release disk images (qcow2,
   raw.zst) into `target/molt/images/dist`; `docs/install.md` explains them.
+- `cargo xtask molt iso [IMAGE]` makes the install ISO (ADR 0019) into
+  `target/molt/iso`; `cargo xtask molt test-install` installs the test image
+  from its ISO on an empty VM with an answers file and boots the result.
+  `cargo run -p crust-installer -- --demo` shows the installer's screens.
 - `cargo xtask molt keygen` makes the release module-signing key pair once;
   it goes into the `release` environment secrets, never into the repo.
 - The `molt` workflow builds both architectures, boot-tests amd64 (the hosted

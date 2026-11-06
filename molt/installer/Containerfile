@@ -1,0 +1,71 @@
+# The Crustates install media: the Molt image it installs, booted live, with
+# crust-installer on tty1 and the image itself inside as an OCI layout. Built
+# by `cargo xtask molt iso`, then made into an ISO by image-builder
+# (generic-iso type); see docs/adr/0019-install-media.md.
+#
+# Built FROM the very image it installs: bootc takes the install
+# configuration and the SELinux policy from the system it runs on.
+ARG MOLT=localhost/crustates/molt:dev
+FROM ${MOLT}
+
+# What image-builder needs inside the live system, which is also its build
+# root: live boot (dracut-live), the ISO tools, GRUB's CD images, and for
+# x86 the BIOS modules. isomd5sum before dracut, or the media check is left out.
+RUN case "$(uname -m)" in \
+        x86_64) arch="grub2-efi-x64-cdboot grub2-pc-modules" ;; \
+        aarch64) arch="grub2-efi-aa64-cdboot" ;; \
+    esac \
+    && dnf -y install --setopt=install_weak_deps=False \
+        dracut-live isomd5sum xorriso squashfs-tools dosfstools $arch \
+    && dnf clean all \
+    && rm -rf /run/dnf /var/cache/libdnf5 /var/log/dnf5.log* /var/lib/dnf \
+    && mkdir -p /boot/efi && cp -ra /usr/lib/efi/*/*/EFI /boot/efi
+
+# The image to install, by digest as the release workflow signed it (or the
+# local test image): an OCI layout that bootc reads directly, so installing
+# needs no extra memory.
+RUN --mount=type=bind,from=payload,target=/payload \
+    skopeo copy --preserve-digests oci:/payload oci:/usr/lib/crustates/payload:molt \
+    && echo "oci:/usr/lib/crustates/payload:molt" >/usr/lib/crustates/installer-payload
+
+# The live system runs the installer, not Crustates: no API, agent, console,
+# health checks or pool imports. tty2 keeps the system log.
+COPY molt/installer/crust-installer.service /usr/lib/systemd/system/
+RUN systemctl mask crust-api.service crust-agent.service crust-firstboot.service crust-console.service \
+        crust-boot-trial.service greenboot-healthcheck.service greenboot-set-rollback-trigger.service \
+        zfs-import-scan.service zfs-import-cache.service bootloader-update.service \
+        crust-selftest.service \
+    && systemctl enable crust-installer.service
+
+# The boot menu (design kit: lc-boot-menu). image-builder renders each entry
+# as `linux` and `initrd` lines only, so "boot from disk" and "firmware
+# settings" cannot be entries; the installer offers the firmware settings
+# when the hardware check fails. The serial console is there for machines
+# without a screen.
+RUN version=$(. /usr/lib/os-release && echo "$IMAGE_VERSION") \
+    && case "$(uname -m)" in x86_64) serial=ttyS0 ;; *) serial=ttyAMA0 ;; esac \
+    && root="root=live:CDLABEL=CRUSTATES rd.live.image enforcing=0 console=$serial,115200n8 console=tty0" \
+    && mkdir -p /usr/lib/image-builder/bootc \
+    && printf '%s\n' \
+        'label: "CRUSTATES"' \
+        'grub2:' \
+        '  timeout: 10' \
+        '  entries:' \
+        "    - name: \"Install Crustates ${version}\"" \
+        "      linux: \"\${kernelpath} ${root} quiet rhgb\"" \
+        '      initrd: "${initrdpath}"' \
+        '    - name: "Install Crustates (basic graphics)"' \
+        "      linux: \"\${kernelpath} ${root} nomodeset\"" \
+        '      initrd: "${initrdpath}"' \
+        '    - name: "Rescue a broken install"' \
+        "      linux: \"\${kernelpath} ${root} crust.rescue quiet rhgb\"" \
+        '      initrd: "${initrdpath}"' \
+        '    - name: "Check install media"' \
+        "      linux: \"\${kernelpath} ${root} rd.live.check\"" \
+        '      initrd: "${initrdpath}"' \
+        >/usr/lib/image-builder/bootc/iso.yaml
+
+# Live boot from the ISO's squashfs, with the media check.
+RUN kver=$(ls /usr/lib/modules) \
+    && DRACUT_NO_XATTR=1 dracut --force --no-hostonly --add dmsquash-live \
+        --kver "$kver" "/usr/lib/modules/$kver/initramfs.img"

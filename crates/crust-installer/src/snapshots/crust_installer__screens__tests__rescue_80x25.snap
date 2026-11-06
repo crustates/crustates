@@ -1,0 +1,29 @@
+---
+source: crates/crust-installer/src/screens.rs
+expression: small
+---
+ Crustates installer  0.2.0  amd64  UEFI  Secure Boot on                 rescue 
+ ┌ Steps ─────────────────────────────────────────────────────────────────────┐ 
+ │  > 1 Language    [ ] 2 Hardware check   [ ] 3 Disks   [ ] 4 Network   [ ] 5│ 
+ └────────────────────────────────────────────────────────────────────────────┘ 
+ ┌ Rescue a broken install ───────────────────────────────────────────────────┐ 
+ │                                                                            │ 
+ │ The installer looks for Crustates on this machine's disks. It reads them   │ 
+ │ and changes nothing until you choose a repair.                             │ 
+ │                                                                            │ 
+ │ Found                                                                      │ 
+ │   /dev/nvme0n1p3: 0.2.0 (4f2a9c01d3e5), boots next · 0.1.0 (9b1e77aa0c2d)  │ 
+ │                                                                            │ 
+ │ Repairs                                                                    │ 
+ │   p  boot the previous OS image next                                       │ 
+ │   n  reset the network to DHCP on every port                               │ 
+ │   z  list the ZFS pools (they are not imported)                            │ 
+ │   enter  reboot                                                            │ 
+ │                                                                            │ 
+ │ Repairing the boot loader comes in a later release.                        │ 
+ │                                                                            │ 
+ │                                                                            │ 
+ │                                                                            │ 
+ │                                                                            │ 
+ └────────────────────────────────────────────────────────────────────────────┘ 
+  p  previous image   n  network to DHCP   z  pools   r  look again   enter  reb

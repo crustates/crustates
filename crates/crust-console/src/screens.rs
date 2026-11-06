@@ -10,8 +10,8 @@ use std::time::Instant;
 use crust_tui::mark;
 use crust_tui::palette::Role;
 use crust_tui::widgets::{
-    self, Check, Item, State, background, button, centered, check, field, key_bar, modal, pane,
-    progress, status, top_bar,
+    self, Check, Item, State, background, button, centered, check, field, fit, key_bar, modal,
+    pane, progress, status, top_bar,
 };
 use ratatui::buffer::Buffer;
 use ratatui::layout::Rect;
@@ -137,24 +137,6 @@ fn panel(
     Paragraph::new(fit(lines, text.width, text.height))
         .wrap(Wrap { trim: false })
         .render(text, buf);
-}
-
-/// Drops blank lines, last first, until `lines` fit `width`×`height`: on
-/// small screens the content moves together instead of being cut off.
-fn fit(mut lines: Vec<Line<'static>>, width: u16, height: u16) -> Vec<Line<'static>> {
-    let rows = |lines: &[Line<'_>]| -> usize {
-        lines
-            .iter()
-            .map(|l| l.width().div_ceil(usize::from(width.max(1))).max(1))
-            .sum()
-    };
-    while rows(&lines) > usize::from(height) {
-        let Some(blank) = lines.iter().rposition(|l| l.width() == 0) else {
-            break;
-        };
-        lines.remove(blank);
-    }
-    lines
 }
 
 fn blank() -> Line<'static> {
